@@ -31,6 +31,12 @@ interface PresetScenario {
   platform: string
 }
 
+interface ChatAnalysisResponse {
+  draft?: string
+  decision?: string
+  [key: string]: unknown
+}
+
 const PRESET_SCENARIOS: PresetScenario[] = [
   {
     label: "Tanya Stok Tersedia (Valid)",
@@ -89,7 +95,7 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
     if (!message.trim()) return
     setAnalyzing(true)
     try {
-      const res = await api.post("/api/chat/analyze", {
+      const res = await api.post<ChatAnalysisResponse>("/api/chat/analyze", {
         message: message.trim(),
         platform,
         sku_context: skuContext ? skuContext.trim() : null,
@@ -217,9 +223,16 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
                 rows={5}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                    e.preventDefault()
+                    void handleAnalyze()
+                  }
+                }}
                 placeholder="Ketik pertanyaan atau keluhan pelanggan..."
                 className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 text-xs leading-relaxed text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all font-medium"
               />
+              <p className="mt-1 text-[10px] text-slate-400">Tip: tekan Ctrl/Cmd + Enter untuk menganalisis.</p>
             </div>
 
             {/* Provider and Submit Button */}

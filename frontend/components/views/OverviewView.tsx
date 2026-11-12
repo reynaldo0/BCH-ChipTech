@@ -24,7 +24,7 @@ import {
 } from "lucide-react"
 import DishOrbitCarousel, { Dish } from "@/components/ui/dish-orbit-carousel"
 import { api } from "@/lib/api"
-import { formatIDR, formatNumber } from "@/lib/utils"
+import { formatIDR } from "@/lib/utils"
 
 // Product images formatted for the carousel (clean SVG / CDN images)
 const SAMPLE_DISHES: Dish[] = [

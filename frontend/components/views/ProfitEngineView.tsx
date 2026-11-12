@@ -86,17 +86,7 @@ export function ProfitEngineView() {
     formData.append("file", file)
 
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("kompas_token") : null
-      const res = await fetch("http://127.0.0.1:8000/api/imports/preview", {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      })
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.detail || "Gagal memproses pratinjau.")
-      }
-      const data = await res.json()
+      const data = await api.upload("/api/imports/preview", formData)
       setImportPreview(data)
     } catch (err: any) {
       alert(`Error preview CSV: ${err.message}`)

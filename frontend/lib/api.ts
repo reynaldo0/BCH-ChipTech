@@ -30,7 +30,7 @@ async function parseError(res: Response): Promise<string> {
   return "Permintaan tidak dapat diproses. Periksa koneksi ke server KOMPAS."
 }
 
-export async function fetchApi<T = unknown>(
+export async function fetchApi<T = any>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -57,18 +57,18 @@ export async function fetchApi<T = unknown>(
 }
 
 export const api = {
-  get: <T = unknown>(path: string) => fetchApi<T>(path, { method: "GET" }),
-  post: <T = unknown>(path: string, body?: unknown) =>
+  get: <T = any>(path: string) => fetchApi<T>(path, { method: "GET" }),
+  post: <T = any>(path: string, body?: unknown) =>
     fetchApi<T>(path, {
       method: "POST",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
-  patch: <T = unknown>(path: string, body?: unknown) =>
+  patch: <T = any>(path: string, body?: unknown) =>
     fetchApi<T>(path, {
       method: "PATCH",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
-  upload: <T = unknown>(path: string, formData: FormData) =>
+  upload: <T = any>(path: string, formData: FormData) =>
     fetchApi<T>(path, { method: "POST", body: formData }),
 }
 

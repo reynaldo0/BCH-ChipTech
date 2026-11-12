@@ -38,7 +38,7 @@ export default function HomePage() {
 
   async function syncInitialState() {
     try {
-      const providerRes = await api.get("/api/chat/provider")
+      const providerRes = await api.get<{ jev_enabled?: boolean }>("/api/chat/provider")
       if (providerRes && typeof providerRes.jev_enabled === "boolean") {
         setJevEnabled(providerRes.jev_enabled)
       }
@@ -47,7 +47,7 @@ export default function HomePage() {
     }
 
     try {
-      const authRes = await api.post("/api/auth/switch-role", { role: currentRole })
+      const authRes = await api.post<{ token?: string }>("/api/auth/switch-role", { role: currentRole })
       if (authRes?.token && typeof window !== "undefined") {
         localStorage.setItem("kompas_token", authRes.token)
       }
@@ -58,7 +58,7 @@ export default function HomePage() {
 
   async function handleRoleChange(newRole: Role) {
     try {
-      const res = await api.post("/api/auth/switch-role", { role: newRole })
+      const res = await api.post<{ token?: string }>("/api/auth/switch-role", { role: newRole })
       if (res?.token && typeof window !== "undefined") {
         localStorage.setItem("kompas_token", res.token)
       }
@@ -78,7 +78,9 @@ export default function HomePage() {
 
   async function handleToggleJev() {
     try {
-      const res = await api.post("/api/chat/toggle-jev")
+      const res = await api.post<{ jev_enabled: boolean; message: string }>("/api/chat/toggle-jev", {
+        enabled: !jevEnabled,
+      })
       setJevEnabled(res.jev_enabled)
       setToast({
         type: res.jev_enabled ? "success" : "info",
@@ -104,7 +106,7 @@ export default function HomePage() {
 
     setIsResetting(true)
     try {
-      const res = await api.post("/api/settings/reset-demo")
+      const res = await api.post<{ message?: string }>("/api/settings/reset-demo")
       setToast({
         type: "success",
         message: res.message || "Data demo berhasil dipulihkan ke kondisi awal lengkap!",
