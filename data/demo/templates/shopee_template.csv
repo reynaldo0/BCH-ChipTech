@@ -1,0 +1,2 @@
+Order ID,Order Date,SKU,Qty,Gross Sales,Seller Discount,Refund,COGS,Commission,Fixed Fee,Seller Shipping,Packing Cost,Return Logistics,Other Cost
+DEMO-SHP-1019-001,2026-10-19,KRM-ALM-250,1,42000.00,0,0,29000.00,3360.00,1250.00,0,1500,0,0

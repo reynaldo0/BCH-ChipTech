@@ -1,0 +1,68 @@
+[
+  {
+    "sku": "KRM-AJW-250",
+    "evidence_type": "halal",
+    "issuer": "Lembaga Sertifikasi DEMO (SIMULASI)",
+    "document_no": "DEMO-HALAL-0001",
+    "valid_from": "2026-01-01",
+    "valid_to": "2027-12-31",
+    "status": "VALID",
+    "file_ref": null,
+    "notes": "Dokumen fiktif untuk demo. Bukan sertifikat halal nyata."
+  },
+  {
+    "sku": "KRM-AJW-250",
+    "evidence_type": "bpom",
+    "issuer": "Dinas Demo (SIMULASI)",
+    "document_no": "DEMO-BPOM-0001",
+    "valid_from": "2026-01-01",
+    "valid_to": "2028-12-31",
+    "status": "VALID",
+    "file_ref": null,
+    "notes": "Izin edar fiktif untuk demo. Bukan nomor BPOM nyata."
+  },
+  {
+    "sku": "KRM-AJW-250",
+    "evidence_type": "expiry",
+    "issuer": "Gudang DEMO",
+    "document_no": "DEMO-EXP-0001",
+    "valid_from": "2026-10-01",
+    "valid_to": "2027-03-31",
+    "status": "VALID",
+    "file_ref": null,
+    "notes": "Tanggal kedaluwarsa fiktif untuk batch demo."
+  },
+  {
+    "sku": "CKL-TRK-200",
+    "evidence_type": "expiry",
+    "issuer": "Gudang DEMO",
+    "document_no": "DEMO-EXP-0002",
+    "valid_from": "2025-01-01",
+    "valid_to": "2026-06-30",
+    "status": "VALID",
+    "file_ref": null,
+    "notes": "Dokumen demo sudah kedaluwarsa; sistem harus abstain."
+  },
+  {
+    "sku": "SWK-010",
+    "evidence_type": "bpom",
+    "issuer": "Dinas Demo (SIMULASI)",
+    "document_no": "DEMO-BPOM-0003",
+    "valid_from": "2025-01-01",
+    "valid_to": "2026-01-31",
+    "status": "VALID",
+    "file_ref": null,
+    "notes": "Nomor izin edar demo sudah kedaluwarsa."
+  },
+  {
+    "sku": "CKL-ARB-500",
+    "evidence_type": "composition",
+    "issuer": "Produsen DEMO",
+    "document_no": "DEMO-KOMP-0001",
+    "valid_from": "2026-01-01",
+    "valid_to": null,
+    "status": "UNVERIFIED",
+    "file_ref": null,
+    "notes": "Komposisi demo belum diverifikasi; tidak boleh dipakai klaim."
+  }
+]

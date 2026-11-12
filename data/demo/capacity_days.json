@@ -1,0 +1,422 @@
+[
+  {
+    "day": "2026-10-19",
+    "capacity": 700,
+    "used": 420,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-20",
+    "capacity": 700,
+    "used": 437,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-21",
+    "capacity": 700,
+    "used": 454,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-22",
+    "capacity": 700,
+    "used": 471,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-23",
+    "capacity": 700,
+    "used": 488,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-24",
+    "capacity": 700,
+    "used": 505,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-25",
+    "capacity": 700,
+    "used": 0,
+    "is_closed": true,
+    "note": "Minggu: tidak ada CS/pengiriman."
+  },
+  {
+    "day": "2026-10-27",
+    "capacity": 700,
+    "used": 556,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-28",
+    "capacity": 700,
+    "used": 573,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-29",
+    "capacity": 700,
+    "used": 590,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-30",
+    "capacity": 700,
+    "used": 607,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-10-31",
+    "capacity": 700,
+    "used": 624,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-01",
+    "capacity": 700,
+    "used": 0,
+    "is_closed": true,
+    "note": "Minggu: tidak ada CS/pengiriman."
+  },
+  {
+    "day": "2026-11-02",
+    "capacity": 700,
+    "used": 438,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-03",
+    "capacity": 700,
+    "used": 455,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-04",
+    "capacity": 700,
+    "used": 472,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-05",
+    "capacity": 700,
+    "used": 489,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-06",
+    "capacity": 700,
+    "used": 506,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-07",
+    "capacity": 700,
+    "used": 523,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-08",
+    "capacity": 700,
+    "used": 0,
+    "is_closed": true,
+    "note": "Minggu: tidak ada CS/pengiriman."
+  },
+  {
+    "day": "2026-11-09",
+    "capacity": 700,
+    "used": 557,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-10",
+    "capacity": 700,
+    "used": 574,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-11",
+    "capacity": 700,
+    "used": 591,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-12",
+    "capacity": 700,
+    "used": 608,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-13",
+    "capacity": 700,
+    "used": 625,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-14",
+    "capacity": 700,
+    "used": 422,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-15",
+    "capacity": 700,
+    "used": 0,
+    "is_closed": true,
+    "note": "Minggu: tidak ada CS/pengiriman."
+  },
+  {
+    "day": "2026-11-16",
+    "capacity": 700,
+    "used": 456,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-17",
+    "capacity": 700,
+    "used": 473,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-18",
+    "capacity": 700,
+    "used": 490,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-19",
+    "capacity": 700,
+    "used": 507,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-20",
+    "capacity": 700,
+    "used": 524,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-21",
+    "capacity": 700,
+    "used": 541,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-22",
+    "capacity": 700,
+    "used": 0,
+    "is_closed": true,
+    "note": "Minggu: tidak ada CS/pengiriman."
+  },
+  {
+    "day": "2026-11-23",
+    "capacity": 700,
+    "used": 575,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-24",
+    "capacity": 700,
+    "used": 592,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-25",
+    "capacity": 700,
+    "used": 609,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-26",
+    "capacity": 700,
+    "used": 626,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-27",
+    "capacity": 700,
+    "used": 423,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-28",
+    "capacity": 700,
+    "used": 440,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-11-29",
+    "capacity": 700,
+    "used": 0,
+    "is_closed": true,
+    "note": "Minggu: tidak ada CS/pengiriman."
+  },
+  {
+    "day": "2026-11-30",
+    "capacity": 700,
+    "used": 474,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-01",
+    "capacity": 700,
+    "used": 491,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-02",
+    "capacity": 700,
+    "used": 508,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-03",
+    "capacity": 700,
+    "used": 525,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-04",
+    "capacity": 700,
+    "used": 542,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-05",
+    "capacity": 700,
+    "used": 559,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-06",
+    "capacity": 700,
+    "used": 0,
+    "is_closed": true,
+    "note": "Minggu: tidak ada CS/pengiriman."
+  },
+  {
+    "day": "2026-12-07",
+    "capacity": 700,
+    "used": 593,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-08",
+    "capacity": 700,
+    "used": 610,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-09",
+    "capacity": 700,
+    "used": 627,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-10",
+    "capacity": 700,
+    "used": 424,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-11",
+    "capacity": 700,
+    "used": 441,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-12",
+    "capacity": 700,
+    "used": 458,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-13",
+    "capacity": 700,
+    "used": 0,
+    "is_closed": true,
+    "note": "Minggu: tidak ada CS/pengiriman."
+  },
+  {
+    "day": "2026-12-14",
+    "capacity": 700,
+    "used": 492,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-15",
+    "capacity": 700,
+    "used": 509,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-16",
+    "capacity": 700,
+    "used": 526,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-17",
+    "capacity": 700,
+    "used": 543,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  },
+  {
+    "day": "2026-12-18",
+    "capacity": 700,
+    "used": 560,
+    "is_closed": false,
+    "note": "SIMULASI: kapasitas dummy 700/hari."
+  }
+]

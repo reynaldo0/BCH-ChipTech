@@ -1,0 +1,175 @@
+# =============================================================================
+# KOMPAS — root .gitignore
+# Covers the FastAPI backend, Next.js frontend, local databases, secrets,
+# generated build output, test artifacts, and runtime uploads.
+#
+# Keep tracked (intentionally NOT ignored):
+#   - csv/                 official case-study / dummy source data (read-only)
+#   - data/demo/           deterministic demo datasets needed to run the app
+#   - docs/                requirement, design, and stack documents
+#   - frontend/next-env.d.ts, package-lock.json, tsconfig.json, etc.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Environment and secrets
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Local secret/key files (but not demo documents in data/)
+*.pem
+*.key
+*.p12
+*.pfx
+
+# -----------------------------------------------------------------------------
+# Python / FastAPI backend
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# Packaging / build
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Test and type-check caches
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+*.cover
+
+# Local SQLite databases and journals
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Runtime pids / logs
+*.pid
+*.pid.lock
+*.log
+logs/
+
+# -----------------------------------------------------------------------------
+# Node.js / Next.js frontend
+# -----------------------------------------------------------------------------
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+**/dist/
+**/.turbo/
+**/.swc/
+**/.vercel/
+**/.netlify/
+
+# Next.js / TypeScript incremental output
+*.tsbuildinfo
+next-env.d.ts.timestamp
+
+# Package manager caches and logs
+.npm/
+.pnpm-store/
+.yarn/
+cache/
+.npmrc.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Lint / test / coverage output
+.eslintcache
+.stylelintcache
+.nyc_output/
+coverage/
+playwright-report/
+blob-report/
+test-results/
+
+# -----------------------------------------------------------------------------
+# Runtime data
+# -----------------------------------------------------------------------------
+# User-uploaded import files are never committed.
+data/uploads/*
+!data/uploads/.gitkeep
+
+# Derived/normalized output can be regenerated from csv/ + scripts.
+data/derived/*
+!data/derived/.gitkeep
+
+# Keep data/demo tracked: it is the deterministic demo dataset.
+!data/demo/**
+!data/demo/**/*
+
+# -----------------------------------------------------------------------------
+# Editors and IDEs
+# -----------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*~
+
+# -----------------------------------------------------------------------------
+# Operating system files
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# -----------------------------------------------------------------------------
+# Temporary / merge artifacts
+# -----------------------------------------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej

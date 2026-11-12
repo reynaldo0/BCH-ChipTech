@@ -1,0 +1,68 @@
+[
+  {
+    "marketplace": "Shopee",
+    "category": "ALL",
+    "version": "demo-2026H1",
+    "effective_from": "2026-01-01",
+    "effective_to": "2026-10-31",
+    "commission_pct": "8.0000",
+    "fixed_fee": "1250.00",
+    "admin_pct": "0.0000",
+    "notes": "SIMULASI: tarif demo, bukan tarif resmi Shopee."
+  },
+  {
+    "marketplace": "TikTok Shop",
+    "category": "ALL",
+    "version": "demo-2026H1",
+    "effective_from": "2026-01-01",
+    "effective_to": "2026-10-31",
+    "commission_pct": "6.5000",
+    "fixed_fee": "1000.00",
+    "admin_pct": "0.0000",
+    "notes": "SIMULASI: tarif demo, bukan tarif resmi TikTok Shop."
+  },
+  {
+    "marketplace": "Lazada",
+    "category": "ALL",
+    "version": "demo-2026H1",
+    "effective_from": "2026-01-01",
+    "effective_to": "2026-10-31",
+    "commission_pct": "7.5000",
+    "fixed_fee": "1500.00",
+    "admin_pct": "0.0000",
+    "notes": "SIMULASI: tarif demo, bukan tarif resmi Lazada."
+  },
+  {
+    "marketplace": "Shopee",
+    "category": "ALL",
+    "version": "demo-2026H2",
+    "effective_from": "2026-11-01",
+    "effective_to": null,
+    "commission_pct": "9.0000",
+    "fixed_fee": "1250.00",
+    "admin_pct": "0.0000",
+    "notes": "SIMULASI: kenaikan tarif demo untuk uji effective date."
+  },
+  {
+    "marketplace": "TikTok Shop",
+    "category": "ALL",
+    "version": "demo-2026H2",
+    "effective_from": "2026-11-01",
+    "effective_to": null,
+    "commission_pct": "7.0000",
+    "fixed_fee": "1000.00",
+    "admin_pct": "0.0000",
+    "notes": "SIMULASI: kenaikan tarif demo untuk uji effective date."
+  },
+  {
+    "marketplace": "Lazada",
+    "category": "ALL",
+    "version": "demo-2026H2",
+    "effective_from": "2026-11-01",
+    "effective_to": null,
+    "commission_pct": "8.0000",
+    "fixed_fee": "1500.00",
+    "admin_pct": "0.0000",
+    "notes": "SIMULASI: kenaikan tarif demo untuk uji effective date."
+  }
+]
