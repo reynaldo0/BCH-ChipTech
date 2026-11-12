@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -52,12 +55,17 @@ def run_chat_evaluation_endpoint(
         dataset_version=payload.dataset_version,
         actor=actor,
     )
+    metrics = dict(run.metrics_json.get("chat", run.metrics_json) if run.metrics_json else {})
+    if "total" in metrics:
+        metrics.setdefault("total_cases", metrics["total"])
+    if "decision_correct" in metrics and metrics.get("total"):
+        metrics.setdefault("decision_match_rate", metrics["decision_correct"] / metrics["total"])
     return {
         "id": run.id,
         "dataset_version": run.dataset_version,
         "provider": run.provider,
         "status": run.status,
-        "metrics": run.metrics_json.get("chat", run.metrics_json) if run.metrics_json else {},
+        "metrics": metrics,
         "results": run.results_json,
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
@@ -97,12 +105,17 @@ def run_profit_evaluation_endpoint(
         dataset_version=dataset_version,
         actor=actor,
     )
+    metrics = dict(run.metrics_json.get("profit", run.metrics_json) if run.metrics_json else {})
+    if "total" in metrics:
+        metrics.setdefault("total_cases", metrics["total"])
+    if "passed" in metrics and metrics.get("total"):
+        metrics.setdefault("exact_match_rate", metrics["passed"] / metrics["total"])
     return {
         "id": run.id,
         "dataset_version": run.dataset_version,
         "provider": run.provider,
         "status": run.status,
-        "metrics": run.metrics_json.get("profit", run.metrics_json) if run.metrics_json else {},
+        "metrics": metrics,
         "results": run.results_json,
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,

@@ -131,7 +131,7 @@ export function ProfitEngineView() {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-teal-mid uppercase tracking-wider">
             <DollarSign className="h-4 w-4" />
-            <span>Profit Engine & Rekonsiliasi (Loop: Keluhan → Margin & Fee Guard)</span>
+            <span>Ringkasan laba & rekonsiliasi</span>
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-deep-teal">
             Kalkulator Laba Bersih Deterministik

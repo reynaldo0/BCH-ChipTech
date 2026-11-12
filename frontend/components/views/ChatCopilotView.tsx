@@ -9,14 +9,12 @@ import {
   AlertTriangle,
   Copy,
   Check,
-  Sparkles,
   Clock,
   Layers,
   ChevronRight,
   ExternalLink,
   Info,
   Flame,
-  Zap,
   CheckCircle2,
   RefreshCw,
   MessageSquare,
@@ -81,7 +79,7 @@ const PRESET_SCENARIOS: PresetScenario[] = [
   },
 ]
 
-export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => void } = {}) {
+export function ChatCopilotView({ onNavigate, compact = false }: { onNavigate?: (tab: any) => void; compact?: boolean } = {}) {
   const [message, setMessage] = useState(PRESET_SCENARIOS[0].message)
   const [platform, setPlatform] = useState(PRESET_SCENARIOS[0].platform)
   const [skuContext, setSkuContext] = useState<string>(PRESET_SCENARIOS[0].sku || "")
@@ -99,7 +97,7 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
         message: message.trim(),
         platform,
         sku_context: skuContext ? skuContext.trim() : null,
-        prefer_provider: preferProvider === "auto" ? null : preferProvider,
+        prefer_provider: preferProvider,
         persist: true,
       })
       setResult(res)
@@ -135,14 +133,13 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
   const isEscalate = result?.decision === "ESKALASI"
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="min-w-0 space-y-6 pb-8">
       {/* Quick Scenario Pills (Clean Soft UI) */}
       <div className="modern-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-blue-600" />
-          <span className="text-xs font-bold text-slate-800">Skenario Pengujian Siap Uji:</span>
+          <span className="text-xs font-bold text-slate-800">Contoh pesan pelanggan:</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {PRESET_SCENARIOS.slice(0, 4).map((s, idx) => (
             <button
               key={idx}
@@ -169,9 +166,9 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
       </div>
 
       {/* Main Split Workbench */}
-      <div className="grid gap-6 lg:grid-cols-12">
+      <div className={`grid gap-6 ${compact ? "grid-cols-1" : "lg:grid-cols-12"}`}>
         {/* Left Column: Customer Input & Context (5 cols) */}
-        <div className="space-y-5 lg:col-span-5">
+        <div className={`min-w-0 space-y-5 ${compact ? "" : "lg:col-span-5"}`}>
           <div className="modern-card p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 font-display">
@@ -236,16 +233,16 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
             </div>
 
             {/* Provider and Submit Button */}
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <div className="flex flex-col items-stretch gap-3 pt-1 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex min-w-0 flex-col items-start gap-1.5 text-xs text-slate-500 sm:flex-row sm:items-center">
                 <span className="font-medium">Model:</span>
                 <select
                   value={preferProvider}
                   onChange={(e) => setPreferProvider(e.target.value)}
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700"
+                  className="field-control min-w-0 max-w-full text-xs font-bold"
                 >
                   <option value="auto">Auto Router (Jev / Fallback)</option>
-                  <option value="jev">Jev AI Only</option>
+                  <option value="jev">Jawaban toko</option>
                   <option value="rule-based">Rule-Based Deterministic</option>
                 </select>
               </div>
@@ -253,16 +250,16 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
               <button
                 onClick={handleAnalyze}
                 disabled={analyzing}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/25 hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-sm bg-brand-700 px-5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-brand-800 disabled:opacity-50 sm:w-auto"
               >
-                <Zap className={`h-3.5 w-3.5 ${analyzing ? "animate-spin" : ""}`} />
-                <span>{analyzing ? "Memproses..." : "Analisis Pesan"}</span>
+                <Send className={`h-3.5 w-3.5 ${analyzing ? "animate-spin" : ""}`} />
+                <span>{analyzing ? "Memproses..." : "Analisis pesan"}</span>
               </button>
             </div>
           </div>
 
           {/* Policy Guardrails Explanation Card */}
-          <div className="modern-card p-5 space-y-3 bg-gradient-to-br from-white to-slate-50">
+          <div className="modern-card p-5 space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <ShieldCheck className="h-4 w-4 text-emerald-600" />
               <span>Kebijakan Pengamanan Policy Gate</span>
@@ -270,7 +267,7 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
             <div className="space-y-2 text-xs text-slate-600 font-medium">
               <div className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />
-                <span><strong>Anti-Halusinasi:</strong> Fakta harga dan stok diverifikasi dari snapshot Product Brain.</span>
+                <span><strong>Periksa sumber:</strong> Fakta harga dan stok diverifikasi dari data produk.</span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500 mt-1.5 flex-shrink-0" />
@@ -285,7 +282,7 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
         </div>
 
         {/* Right Column: Copilot Verdict, Evidence, & Draft (7 cols) */}
-        <div className="space-y-5 lg:col-span-7">
+        <div className={`min-w-0 space-y-5 ${compact ? "" : "lg:col-span-7"}`}>
           {result ? (
             <div className="modern-card p-6 space-y-5 shadow-soft-md">
               {/* Top Decision Bar */}
@@ -294,10 +291,10 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
                   <span
                     className={`h-11 w-11 rounded-2xl flex items-center justify-center text-white shadow-sm flex-shrink-0 ${
                       isDirect
-                        ? "bg-gradient-to-tr from-emerald-600 to-teal-500 shadow-emerald-500/20"
+                        ? "bg-success"
                         : isLimited
-                        ? "bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-blue-500/20"
-                        : "bg-gradient-to-tr from-rose-600 to-amber-600 shadow-rose-500/20"
+                        ? "bg-brand-700"
+                        : "bg-danger"
                     }`}
                   >
                     {isDirect && <CheckCircle2 className="h-6 w-6" />}
@@ -329,10 +326,9 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
 
                 <div className="text-right flex sm:flex-col items-center sm:items-end justify-between sm:justify-center">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Engine Provider
+                    Penyedia jawaban
                   </span>
                   <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                    <Sparkles className="h-3 w-3 text-purple-600" />
                     {result.provider} ({Math.round(result.confidence * 100)}% Match)
                   </span>
                 </div>
@@ -358,7 +354,7 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                     <span>Bukti Fakta Terverifikasi ({result.evidence?.length || 0})</span>
                   </h4>
-                  <span className="text-[10px] font-semibold text-slate-400">Sumber Product Brain</span>
+                  <span className="text-[10px] font-semibold text-slate-400">Sumber data produk</span>
                 </div>
 
                 {result.evidence && result.evidence.length > 0 ? (
@@ -392,7 +388,6 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-blue-600" />
                     <span>Rekomendasi Draft Jawaban CS</span>
                   </h4>
                   <button
@@ -442,7 +437,7 @@ export function ChatCopilotView({ onNavigate }: { onNavigate?: (tab: any) => voi
           ) : (
             <div className="modern-card p-12 text-center text-slate-400 flex flex-col items-center justify-center">
               <Bot className="h-10 w-10 text-slate-300 mb-2" />
-              <p className="text-xs font-medium">Klik &quot;Analisis Pesan&quot; untuk memulai evaluasi Chat Copilot.</p>
+              <p className="text-xs font-medium">Klik &quot;Analisis pesan&quot; untuk memulai.</p>
             </div>
           )}
         </div>

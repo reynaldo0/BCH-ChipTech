@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "KOMPAS | Connected Operations & Margin Intelligence",
+  title: "KOMPAS | Toko Husin",
   description:
-    "Sistem kecerdasan operasional dan margin deterministik untuk Toko Husin. Data simulasi.",
+    "Ringkasan usaha marketplace Toko Husin.",
 }
 
 export default function RootLayout({

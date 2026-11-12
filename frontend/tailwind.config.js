@@ -70,7 +70,7 @@ module.exports = {
       },
       fontFamily: {
         sans: [
-          "Inter",
+          "var(--font-display)",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
@@ -79,6 +79,7 @@ module.exports = {
           "sans-serif",
         ],
         mono: [
+          "var(--font-mono)",
           "ui-monospace",
           "SFMono-Regular",
           "Menlo",
@@ -88,10 +89,10 @@ module.exports = {
         ],
       },
       borderRadius: {
-        xs: "6px",
-        sm: "8px",
-        md: "12px",
-        lg: "16px",
+        xs: "var(--radius-sm)",
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
         xl: "20px",
       },
       boxShadow: {

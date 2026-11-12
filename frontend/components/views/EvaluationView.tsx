@@ -143,7 +143,7 @@ export function EvaluationView() {
                       : "bg-white border-gray-200 text-gray-600"
                   }`}
                 >
-                  Jev AI (TypeSafe / SystemOne)
+                  Jawaban toko (dataset demo)
                 </button>
               </div>
             </div>

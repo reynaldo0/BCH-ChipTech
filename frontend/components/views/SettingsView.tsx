@@ -202,7 +202,7 @@ export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () =>
             <div>
               <h2 className="text-sm font-bold text-deep-teal">Tabel Aturan Potongan & Komisi Marketplace</h2>
               <p className="text-xs text-gray-500">
-                Aturan potongan ini dipakai oleh Profit Engine untuk menghitung laba bersih otomatis tiap transaksi.
+                Aturan potongan ini dipakai untuk menghitung laba bersih tiap transaksi.
               </p>
             </div>
             <button
@@ -464,7 +464,7 @@ export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () =>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-                  <span>Jev AI LLM Orchestrator dengan graceful fallback</span>
+                  <span>Penyedia jawaban dengan cadangan otomatis</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />

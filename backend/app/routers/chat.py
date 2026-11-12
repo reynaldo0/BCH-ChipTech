@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import asdict
 from datetime import datetime
 from typing import Any
@@ -152,4 +154,5 @@ def toggle_jev(payload: ToggleJevRequest):
     return {
         "message": f"Mode Jev AI {'diaktifkan' if payload.enabled else 'dinonaktifkan'}.",
         "jev_demo_mode": DEMO_STATE["jev_demo_mode"],
+        "jev_enabled": DEMO_STATE["jev_demo_mode"],
     }

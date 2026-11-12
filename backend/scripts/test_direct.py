@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from backend.app.main import init_db
 from backend.app.db import SessionLocal
 from backend.app.routers.products import list_all_products, get_product_detail
 from backend.app.routers.chat import analyze_chat, ChatRequestWithProvider
@@ -12,6 +13,7 @@ from backend.app.routers.profit import get_profit_summary, list_transactions
 from backend.app.routers.evaluation import run_chat_evaluation_endpoint, run_profit_evaluation_endpoint
 from backend.app.schemas import EvaluationRequest
 
+init_db()
 db = SessionLocal()
 print("--- 1. Testing Products ---")
 products_res = list_all_products(db=db)
@@ -53,4 +55,5 @@ print("Golden Chat Evaluation:", chat_eval["metrics"])
 assert chat_eval["metrics"]["decision_correct"] >= 24
 assert chat_eval["metrics"]["intent_correct"] >= 25
 
-print("\nALL BACKEND SERVICES & ROUTERS VERIFIED 100% WORKING!")
+db.close()
+print("\nALL BACKEND SERVICES & ROUTERS SMOKE-TESTED SUCCESSFULLY!")

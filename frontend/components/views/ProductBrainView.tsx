@@ -82,7 +82,7 @@ export function ProductBrainView() {
       })
       setEditStockModal(null)
       await loadAll()
-      alert("Snapshot stok fisik berhasil diperbarui di Product Brain!")
+      alert("Snapshot stok fisik berhasil diperbarui.")
     } catch (err: any) {
       alert(`Gagal memperbarui stok: ${err.message}`)
     } finally {
@@ -103,7 +103,7 @@ export function ProductBrainView() {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-teal-mid uppercase tracking-wider">
             <Layers className="h-4 w-4" />
-            <span>Product Brain & Basis Faktual (Single Source of Truth)</span>
+            <span>Data produk & stok</span>
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-deep-teal">
             Katalog Produk, Dokumen Evidence, & SOP Toko
@@ -114,7 +114,7 @@ export function ProductBrainView() {
         </div>
 
         {/* View mode tabs */}
-        <div className="flex items-center gap-1.5 rounded-2xl bg-white p-1 border border-kompas-border shadow-2xs">
+        <div className="flex max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl bg-white p-1 border border-kompas-border shadow-2xs">
           {[
             { id: "products", label: "Katalog & Stok (30)" },
             { id: "operational", label: "SOP Operasional (32)" },
@@ -126,8 +126,8 @@ export function ProductBrainView() {
               onClick={() => setTab(item.id as any)}
               className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
                 tab === item.id
-                  ? "bg-teal-mid text-white shadow-2xs"
-                  : "text-gray-600 hover:text-deep-teal hover:bg-gray-100"
+                  ? "bg-brand-700 text-white shadow-2xs"
+                  : "text-gray-600 hover:text-deep-teal hover:bg-brand-50"
               }`}
             >
               {item.label}
