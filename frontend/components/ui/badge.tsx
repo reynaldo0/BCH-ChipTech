@@ -1,26 +1,34 @@
 import * as React from "react"
+import { cva } from "class-variance-authority"
 import {
   AlertTriangle,
   CheckCircle2,
-  Circle,
+  CircleDot,
   Info,
   MinusCircle,
   ShieldAlert,
-  Sparkles,
   XCircle,
 } from "lucide-react"
 import { cn, statusLabel } from "@/lib/utils"
 
 export type Tone = "success" | "warning" | "danger" | "info" | "neutral" | "brand"
 
-const toneClasses: Record<Tone, string> = {
-  success: "bg-success-bg text-success border-success-border",
-  warning: "bg-warning-bg text-warning border-warning-border",
-  danger: "bg-danger-bg text-danger border-danger-border",
-  info: "bg-info-bg text-info border-info-border",
-  neutral: "bg-surface-muted text-ink-700 border-line",
-  brand: "bg-brand-50 text-brand-900 border-brand-100",
-}
+const badgeVariants = cva(
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold leading-5",
+  {
+    variants: {
+      tone: {
+        success: "border-success-border bg-success-bg text-success-800",
+        warning: "border-warning-border bg-warning-bg text-warning-800",
+        danger: "border-danger-border bg-danger-bg text-danger-800",
+        info: "border-info-border bg-info-bg text-info-800",
+        neutral: "border-border bg-ink-50 text-ink-700",
+        brand: "border-brand-100 bg-brand-50 text-brand-800",
+      },
+    },
+    defaultVariants: { tone: "neutral" },
+  }
+)
 
 export function Badge({
   tone = "neutral",
@@ -34,13 +42,7 @@ export function Badge({
   icon?: React.ReactNode
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold leading-5",
-        toneClasses[tone],
-        className
-      )}
-    >
+    <span className={cn(badgeVariants({ tone }), className)}>
       {icon}
       {children}
     </span>
@@ -56,6 +58,15 @@ function toneFromStatus(status: string | null | undefined): Tone {
   return "neutral"
 }
 
+const toneIcon = {
+  success: CheckCircle2,
+  danger: XCircle,
+  warning: AlertTriangle,
+  info: Info,
+  neutral: CircleDot,
+  brand: CircleDot,
+} as const
+
 export function StatusBadge({
   status,
   label,
@@ -66,22 +77,9 @@ export function StatusBadge({
   className?: string
 }) {
   const tone = toneFromStatus(status)
-  const Icon =
-    tone === "success"
-      ? CheckCircle2
-      : tone === "danger"
-        ? XCircle
-        : tone === "warning"
-          ? AlertTriangle
-          : tone === "info"
-            ? Info
-            : Circle
+  const Icon = toneIcon[tone]
   return (
-    <Badge
-      tone={tone}
-      className={className}
-      icon={<Icon className="h-3 w-3" aria-hidden="true" />}
-    >
+    <Badge tone={tone} className={className} icon={<Icon className="h-3 w-3" aria-hidden="true" />}>
       {label ?? statusLabel(status)}
     </Badge>
   )
@@ -103,13 +101,8 @@ export function MarketplaceBadge({
           ? "bg-mp-lazada"
           : "bg-chart-neutral"
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-700",
-        className
-      )}
-    >
-      <span className={cn("h-2 w-2 rounded-full", dot)} aria-hidden="true" />
+    <span className={cn("inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-700", className)}>
+      <span className={cn("h-2 w-2 rounded-full ring-2 ring-white", dot)} aria-hidden="true" />
       {marketplace || "Tidak diketahui"}
     </span>
   )
@@ -117,11 +110,7 @@ export function MarketplaceBadge({
 
 export function SeverityBadge({ severity }: { severity: string | null | undefined }) {
   const tone: Tone =
-    severity === "kritis" || severity === "tinggi"
-      ? "danger"
-      : severity === "sedang"
-        ? "warning"
-        : "neutral"
+    severity === "kritis" || severity === "tinggi" ? "danger" : severity === "sedang" ? "warning" : "neutral"
   const Icon = tone === "danger" ? ShieldAlert : tone === "warning" ? AlertTriangle : MinusCircle
   return (
     <Badge tone={tone} icon={<Icon className="h-3 w-3" aria-hidden="true" />}>
@@ -132,21 +121,8 @@ export function SeverityBadge({ severity }: { severity: string | null | undefine
 
 export function DecisionBadge({ decision }: { decision: string | null | undefined }) {
   const tone: Tone =
-    decision === "JAWAB_LANGSUNG"
-      ? "success"
-      : decision === "JAWAB_TERBATAS"
-        ? "warning"
-        : decision === "ESKALASI"
-          ? "danger"
-          : "neutral"
-  const Icon =
-    tone === "success"
-      ? CheckCircle2
-      : tone === "warning"
-        ? Info
-        : tone === "danger"
-          ? AlertTriangle
-          : Sparkles
+    decision === "JAWAB_LANGSUNG" ? "success" : decision === "JAWAB_TERBATAS" ? "warning" : decision === "ESKALASI" ? "danger" : "neutral"
+  const Icon = tone === "success" ? CheckCircle2 : tone === "warning" ? Info : tone === "danger" ? AlertTriangle : CircleDot
   return (
     <Badge tone={tone} icon={<Icon className="h-3 w-3" aria-hidden="true" />}>
       {statusLabel(decision)}

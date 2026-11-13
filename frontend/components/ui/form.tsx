@@ -20,17 +20,13 @@ export function Field({
   children: React.ReactNode
   className?: string
 }) {
-  const describedBy = error
-    ? `${htmlFor}-error`
-    : hint
-      ? `${htmlFor}-hint`
-      : undefined
+  const describedBy = error ? `${htmlFor}-error` : hint ? `${htmlFor}-hint` : undefined
   return (
     <div className={cn("space-y-0", className)}>
       <label className="field-label" htmlFor={htmlFor}>
         {label}
         {required ? (
-          <span className="ml-1 text-danger" aria-hidden="true">
+          <span className="ml-0.5 text-danger-600" aria-hidden="true">
             *
           </span>
         ) : null}
@@ -43,11 +39,11 @@ export function Field({
           })
         : children}
       {error ? (
-        <p id={`${htmlFor}-error`} className="mt-1 text-xs text-danger">
+        <p id={`${htmlFor}-error`} className="mt-1.5 text-xs font-medium text-danger-700">
           {error}
         </p>
       ) : hint ? (
-        <p id={`${htmlFor}-hint`} className="mt-1 text-xs text-ink-600">
+        <p id={`${htmlFor}-hint`} className="mt-1.5 text-xs text-ink-500">
           {hint}
         </p>
       ) : null}
@@ -55,36 +51,23 @@ export function Field({
   )
 }
 
-export const Input = React.forwardRef<
-  HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement>
->(({ className, ...props }, ref) => (
-  <input ref={ref} className={cn("field-control h-9", className)} {...props} />
-))
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, ...props }, ref) => <input ref={ref} className={cn("field-control h-9", className)} {...props} />
+)
 Input.displayName = "Input"
 
-export const Textarea = React.forwardRef<
-  HTMLTextAreaElement,
-  React.TextareaHTMLAttributes<HTMLTextAreaElement>
->(({ className, ...props }, ref) => (
-  <textarea
-    ref={ref}
-    className={cn("field-control min-h-[88px] resize-y leading-relaxed", className)}
-    {...props}
-  />
-))
+export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  ({ className, ...props }, ref) => (
+    <textarea ref={ref} className={cn("field-control min-h-[88px] resize-y leading-relaxed", className)} {...props} />
+  )
+)
 Textarea.displayName = "Textarea"
 
-export const Select = React.forwardRef<
-  HTMLSelectElement,
-  React.SelectHTMLAttributes<HTMLSelectElement>
->(({ className, children, ...props }, ref) => (
-  <select
-    ref={ref}
-    className={cn("field-control h-9 cursor-pointer pr-8", className)}
-    {...props}
-  >
-    {children}
-  </select>
-))
+export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
+  ({ className, children, ...props }, ref) => (
+    <select ref={ref} className={cn("field-control h-9", className)} {...props}>
+      {children}
+    </select>
+  )
+)
 Select.displayName = "Select"

@@ -1,88 +1,102 @@
 "use client"
 
 import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
 import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "subtle"
-type ButtonSize = "sm" | "md" | "icon"
-
-const variants: Record<ButtonVariant, string> = {
-  primary:
-    "bg-brand-700 text-white border border-brand-700 hover:bg-brand-800 hover:border-brand-800",
-  secondary:
-    "bg-surface text-ink-900 border border-line-strong hover:bg-surface-muted",
-  ghost:
-    "bg-transparent text-ink-700 border border-transparent hover:bg-surface-muted hover:text-ink-950",
-  danger:
-    "bg-danger text-white border border-danger hover:bg-[#8b352f] hover:border-[#8b352f]",
-  subtle:
-    "bg-brand-50 text-brand-900 border border-brand-100 hover:bg-brand-100",
-}
-
-const sizes: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-xs gap-1.5",
-  md: "h-9 px-4 text-[13px] gap-2",
-  icon: "h-9 w-9 justify-center",
-}
+/**
+ * Button (shadcn/ui pattern).
+ * Varian semantik: default, success, warning, destructive, info.
+ * Alias lama (primary, danger, subtle) tetap didukung.
+ */
+const buttonVariants = cva(
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  {
+    variants: {
+      variant: {
+        default:
+          "border border-brand-800 bg-primary text-primary-foreground shadow-xs hover:bg-brand-800",
+        secondary:
+          "border border-brand-100 bg-brand-50 text-brand-900 hover:bg-brand-100",
+        outline:
+          "border border-input bg-card text-ink-900 shadow-2xs hover:border-ink-400 hover:bg-ink-50",
+        ghost:
+          "border border-transparent text-ink-700 hover:bg-ink-100 hover:text-ink-950",
+        link: "h-auto border-0 p-0 text-brand-700 underline-offset-4 hover:underline",
+        success:
+          "border border-success-800 bg-success-600 text-white shadow-xs hover:bg-success-700",
+        warning:
+          "border border-warning-500 bg-warning-400 text-warning-950 shadow-xs hover:bg-warning-300",
+        destructive:
+          "border border-danger-700 bg-danger-600 text-white shadow-xs hover:bg-danger-700",
+        info: "border border-info-700 bg-info-600 text-white shadow-xs hover:bg-info-700",
+        // alias lama
+        primary:
+          "border border-brand-800 bg-primary text-primary-foreground shadow-xs hover:bg-brand-800",
+        danger:
+          "border border-danger-700 bg-danger-600 text-white shadow-xs hover:bg-danger-700",
+        subtle:
+          "border border-brand-100 bg-brand-50 text-brand-900 hover:bg-brand-100",
+      },
+      size: {
+        sm: "h-8 px-3 text-xs",
+        md: "h-9 px-4",
+        lg: "h-10 px-5 text-sm",
+        icon: "h-9 w-9",
+      },
+    },
+    defaultVariants: { variant: "default", size: "md" },
+  }
+)
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant
-  size?: ButtonSize
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
   loading?: boolean
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  (
-    {
-      className,
-      variant = "secondary",
-      size = "md",
-      loading = false,
-      disabled,
-      children,
-      ...props
-    },
-    ref
-  ) => (
-    <button
-      ref={ref}
-      className={cn(
-        "inline-flex items-center rounded-sm font-semibold transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
-        variants[variant],
-        sizes[size],
-        className
-      )}
-      disabled={disabled || loading}
-      aria-busy={loading || undefined}
-      {...props}
-    >
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-      {children}
-    </button>
-  )
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
+    if (asChild) {
+      return (
+        <Slot ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props}>
+          {children}
+        </Slot>
+      )
+    }
+    return (
+      <button
+        ref={ref}
+        className={cn(buttonVariants({ variant, size }), className)}
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
+        {...props}
+      >
+        {loading ? <Loader2 className="animate-spin" aria-hidden="true" /> : null}
+        {children}
+      </button>
+    )
+  }
 )
 Button.displayName = "Button"
 
 export interface IconButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
   label: string
-  variant?: ButtonVariant
 }
 
-export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
+const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ className, label, variant = "ghost", children, ...props }, ref) => (
     <button
       ref={ref}
       type="button"
       aria-label={label}
       title={label}
-      className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-sm border transition-colors focus-visible:outline-none disabled:opacity-50",
-        variants[variant],
-        className
-      )}
+      className={cn(buttonVariants({ variant, size: "icon" }), "h-8 w-8", className)}
       {...props}
     >
       {children}
@@ -90,3 +104,5 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   )
 )
 IconButton.displayName = "IconButton"
+
+export { Button, IconButton, buttonVariants }
