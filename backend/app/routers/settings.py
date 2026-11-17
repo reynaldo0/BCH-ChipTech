@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import get_db
 from ..models import AuditLog, FeeRule, User
 from ..schemas import FeeRuleOut
@@ -116,6 +117,8 @@ def reset_demo_database(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
+    if not settings.demo_mode:
+        raise HTTPException(status_code=403, detail="Reset data hanya tersedia di mode demo.")
     actor = current_user.username
     seed_all(force=True)
     return {

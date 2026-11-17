@@ -1,6 +1,9 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"
 
+/** Demo mode lets anyone pick a role; production (NEXT_PUBLIC_DEMO_MODE=false) requires login. */
+export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== "false"
+
 export type Role = "owner" | "manager" | "cs" | "packing" | "judge"
 
 export class ApiError extends Error {
@@ -28,7 +31,7 @@ let bootstrap: Promise<string | null> | null = null
 /** Demo login: obtain a session token for the selected role once, so the API can enforce RBAC. */
 async function ensureToken(): Promise<string | null> {
   const existing = authToken()
-  if (existing || typeof window === "undefined") return existing
+  if (existing || typeof window === "undefined" || !DEMO_MODE) return existing
   if (!bootstrap) {
     bootstrap = fetch(`${API_BASE}/api/auth/switch-role`, {
       method: "POST",
@@ -80,7 +83,10 @@ export async function fetchApi<T = any>(
     credentials: "include",
   })
 
-  if (res.status === 401 && typeof window !== "undefined" && token) {
+  if (res.status === 401 && typeof window !== "undefined" && !DEMO_MODE) {
+    window.localStorage.removeItem("kompas_token")
+    if (!window.location.pathname.startsWith("/masuk")) window.location.assign("/masuk")
+  } else if (res.status === 401 && typeof window !== "undefined" && token) {
     // Expired demo session: drop it and retry once with a fresh token.
     window.localStorage.removeItem("kompas_token")
     if (!(options.headers as Record<string, string> | undefined)?.["x-retried"]) {

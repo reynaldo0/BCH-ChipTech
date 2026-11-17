@@ -5,7 +5,7 @@ import { Copy, Forward, Keyboard, ListOrdered, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
-import { CLASS_META, ChatResult, ClassBadge, EvidenceList, HOLDING_REPLY, Warnings, copyText } from "./cs-shared"
+import { CLASS_META, ChatResult, ClassBadge, EvidenceList, HOLDING_REPLY, JevPanel, Warnings, copyText } from "./cs-shared"
 
 type ItemState = "baru" | "selesai" | "diteruskan"
 type QueueItem = ChatResult & { state: ItemState; choice: number }
@@ -283,6 +283,8 @@ export function QueueView() {
                   <Forward /> Teruskan ke staf <kbd className="kbd">E</kbd>
                 </Button>
               </div>
+
+              <JevPanel jev={current.jev} compact />
 
               <details>
                 <summary className="cursor-pointer text-[13px] font-medium text-ink-800">Sumber ({current.evidence.length})</summary>

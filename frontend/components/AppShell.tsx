@@ -21,7 +21,7 @@ import { ChatCopilotView } from "./views/ChatCopilotView"
 import { Alert } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { api, setSessionToken, type Role } from "@/lib/api"
+import { DEMO_MODE, api, setSessionToken, type Role } from "@/lib/api"
 import { useProviderMode } from "./views/cs-shared"
 import { DEMO_LABEL, ROLE_LABELS } from "@/lib/navigation"
 import { cn } from "@/lib/utils"
@@ -60,10 +60,28 @@ export function AppShell({ children, title, description }: { children: React.Rea
   const [roleError, setRoleError] = useState("")
   const providerMode = useProviderMode()
 
+  const [userName, setUserName] = useState("")
+
   useEffect(() => {
-    const savedRole = window.localStorage.getItem("kompas_role") as Role | null
-    if (savedRole && savedRole in ROLE_LABELS) setRole(savedRole)
+    if (DEMO_MODE) {
+      const savedRole = window.localStorage.getItem("kompas_role") as Role | null
+      if (savedRole && savedRole in ROLE_LABELS) setRole(savedRole)
+      return
+    }
+    // Production: the role comes from the server session, never from the browser.
+    api
+      .get<{ role: Role; display_name: string }>("/api/auth/me")
+      .then((me) => {
+        setRole(me.role)
+        setUserName(me.display_name)
+      })
+      .catch(() => undefined)
   }, [])
+
+  function logout() {
+    setSessionToken(null)
+    window.location.assign("/masuk")
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -118,23 +136,40 @@ export function AppShell({ children, title, description }: { children: React.Rea
         </div>
 
         <div className="border-b border-sidebar-border px-5 py-4">
-          <label className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/70" htmlFor="role-switcher">
-            Mode kerja
-          </label>
-          <select
-            id="role-switcher"
-            value={role}
-            disabled={switchingRole}
-            onChange={(event) => void handleRoleChange(event.target.value as Role)}
-            className="mt-1.5 h-9 w-full cursor-pointer rounded-md border border-sidebar-border bg-sidebar-accent px-3 text-xs font-medium text-white transition-colors hover:border-brand-600 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 disabled:opacity-60"
-          >
-            {(Object.keys(ROLE_LABELS) as Role[]).map((item) => (
-              <option key={item} value={item} className="text-ink-950">
-                {ROLE_LABELS[item].short}
-              </option>
-            ))}
-          </select>
-          <p className="mt-2 text-[11px] leading-4 text-sidebar-foreground/70">{ROLE_LABELS[role].description}</p>
+          {DEMO_MODE ? (
+            <>
+              <label className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/70" htmlFor="role-switcher">
+                Mode kerja
+              </label>
+              <select
+                id="role-switcher"
+                value={role}
+                disabled={switchingRole}
+                onChange={(event) => void handleRoleChange(event.target.value as Role)}
+                className="mt-1.5 h-9 w-full cursor-pointer rounded-md border border-sidebar-border bg-sidebar-accent px-3 text-xs font-medium text-white transition-colors hover:border-brand-600 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 disabled:opacity-60"
+              >
+                {(Object.keys(ROLE_LABELS) as Role[]).map((item) => (
+                  <option key={item} value={item} className="text-ink-950">
+                    {ROLE_LABELS[item].short}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-[11px] leading-4 text-sidebar-foreground/70">{ROLE_LABELS[role].description}</p>
+            </>
+          ) : (
+            <div>
+              <p className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/70">Masuk sebagai</p>
+              <p className="mt-1.5 text-sm font-medium text-white">{userName || ROLE_LABELS[role].name}</p>
+              <p className="mt-1 text-[11px] leading-4 text-sidebar-foreground/70">{ROLE_LABELS[role].description}</p>
+              <button
+                type="button"
+                onClick={logout}
+                className="mt-2 rounded-md border border-sidebar-border px-2.5 py-1 text-xs text-sidebar-foreground hover:bg-sidebar-accent hover:text-white"
+              >
+                Keluar
+              </button>
+            </div>
+          )}
           {roleError ? (
             <Alert variant="destructive" className="mt-3 p-2.5 text-[11px]" hideIcon>
               {roleError}
@@ -190,9 +225,11 @@ export function AppShell({ children, title, description }: { children: React.Rea
           >
             <BookOpen className="h-3.5 w-3.5" aria-hidden="true" /> Panduan demo
           </Link>
-          <Badge tone="warning" className="w-full justify-center border-warning-500/30 bg-warning-400/10 font-mono text-[10px] tracking-wide text-warning-300">
-            {DEMO_LABEL}
-          </Badge>
+          {DEMO_MODE ? (
+            <Badge tone="warning" className="w-full justify-center border-warning-500/30 bg-warning-400/10 font-mono text-[10px] tracking-wide text-warning-300">
+              {DEMO_LABEL}
+            </Badge>
+          ) : null}
         </div>
       </aside>
 

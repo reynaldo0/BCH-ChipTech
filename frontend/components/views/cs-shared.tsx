@@ -15,6 +15,25 @@ export interface Evidence {
   updated_at?: string | null
 }
 
+export interface JevDecision {
+  status: string
+  ok: boolean
+  model: string
+  category: "umum" | "belum_pasti" | "keluhan" | null
+  category_probs: Record<string, number>
+  injection_prob: number | null
+  severity: string | null
+  severity_score: number | null
+  latency_ms: number | null
+  cost_usd: number | null
+  input_tokens: number | null
+  request_id: string | null
+  cached: boolean
+  threshold: number
+  detail: string | null
+  effect: string
+}
+
 export interface ChatResult {
   message?: string
   message_class: MessageClass
@@ -25,6 +44,7 @@ export interface ChatResult {
   injection: boolean
   provider: string
   provider_status: string
+  jev?: JevDecision | null
   sku: string | null
   product_name: string | null
   draft: string
@@ -159,4 +179,67 @@ export function useProviderMode() {
     }
   }, [])
   return mode
+}
+
+const JEV_LABEL: Record<string, string> = { umum: "Umum", belum_pasti: "Belum pasti", keluhan: "Keluhan" }
+const IDR_PER_USD = 16500
+
+/** "Keputusan Jev": the typed decision Jev returned, beside what it changed (or not). */
+export function JevPanel({ jev, compact = false }: { jev?: JevDecision | null; compact?: boolean }) {
+  if (!jev) return null
+  const raised = /MENAIKKAN/.test(jev.effect)
+  const tone = !jev.ok ? "neutral" : raised ? "warning" : "success"
+  return (
+    <section aria-label="Keputusan Jev" className="rounded-lg border border-border bg-ink-50/60 p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-display text-[13.5px] font-semibold text-ink-950">Keputusan Jev</h3>
+        <Badge tone={tone}>
+          {!jev.ok ? "Tidak dipakai" : raised ? "Menaikkan kewaspadaan" : "Sejalan dengan aturan"}
+        </Badge>
+      </div>
+
+      {jev.ok ? (
+        <>
+          <dl className="mt-2.5 space-y-1.5" aria-label="Probabilitas kategori">
+            {(["umum", "belum_pasti", "keluhan"] as const).map((key) => {
+              const value = jev.category_probs[key] ?? 0
+              const chosen = jev.category === key
+              return (
+                <div key={key} className="grid grid-cols-[6.5rem_1fr_3rem] items-center gap-2 text-[12.5px]">
+                  <dt className={chosen ? "font-semibold text-ink-950" : "text-ink-600"}>
+                    {JEV_LABEL[key]}
+                    {chosen ? <span className="sr-only"> (pilihan Jev)</span> : null}
+                  </dt>
+                  <dd className="m-0">
+                    <div className="h-2 overflow-hidden rounded-full bg-ink-200" role="presentation">
+                      <div className={chosen ? "h-full bg-brand-600" : "h-full bg-ink-400"} style={{ width: `${Math.round(value * 100)}%` }} />
+                    </div>
+                  </dd>
+                  <dd className="tnum m-0 text-right font-mono text-[12px] text-ink-800">{(value * 100).toFixed(0)}%</dd>
+                </div>
+              )
+            })}
+          </dl>
+          <p className="mt-2 text-[12.5px] text-ink-700">
+            Instruksi tersembunyi: <strong className="tnum">{((jev.injection_prob ?? 0) * 100).toFixed(0)}%</strong>
+            {jev.severity ? <> · Urgensi: <strong>{jev.severity}</strong></> : null}
+            <span className="text-ink-500"> · ambang naik {Math.round(jev.threshold * 100)}%</span>
+          </p>
+        </>
+      ) : null}
+
+      <p className={`mt-2.5 rounded-md border px-2.5 py-1.5 text-[12.5px] ${raised ? "border-warning-border bg-warning-bg text-warning-900" : "border-border bg-card text-ink-800"}`}>
+        {jev.effect}
+      </p>
+
+      {!compact ? (
+        <p className="mt-2 font-mono text-[11px] text-ink-500">
+          {jev.model}
+          {jev.latency_ms != null ? ` · ${jev.cached ? "dari cache" : `${jev.latency_ms} ms`}` : ""}
+          {jev.cost_usd != null && !jev.cached ? ` · $${jev.cost_usd.toFixed(6)} (≈Rp${(jev.cost_usd * IDR_PER_USD).toFixed(2)})` : ""}
+          {jev.detail ? ` · ${jev.detail}` : ""}
+        </p>
+      ) : null}
+    </section>
+  )
 }

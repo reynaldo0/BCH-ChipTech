@@ -73,6 +73,15 @@ FIXED_FAQ = [
     (r"packing(nya)?\s+aman|dikemas\s+aman", "FAQ-019"),
     (r"beli\s+banyak.*diskon|diskon\s+grosir", "FAQ-029"),
 ]
+# FAQ categories map onto the eight fixed intents (policy.INTENTS); anything else is "lainnya".
+FAQ_CATEGORY_INTENT = {
+    "stok": "stok",
+    "harga": "harga",
+    "pengiriman": "pengiriman",
+    "promo": "promo",
+    "pembayaran": "promo",
+    "pesanan": "pesanan",
+}
 CUTOFF_QUESTION = r"hari\s+ini|besok|jam\s+berapa|batas|terakhir|cut\s*-?\s*off|keburu|masih\s+bisa\s+(dikirim|kirim)"
 SHIPPING_WORDS = r"kirim|pengiriman|ongkir|kurir|sampai|pickup|hari\s+ini|besok|\bminggu\b|resi"
 WEEKDAY_ID = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
@@ -289,7 +298,7 @@ def _faq_result(db, faq, intent, product, provider, provider_status, jev_result,
             "meminta OTP, PIN, atau kata sandi."
         )
     return ChatResult(
-        intent=intent if intent != "lainnya" else (faq.category or "lainnya").lower(),
+        intent=intent if intent != "lainnya" else FAQ_CATEGORY_INTENT.get((faq.category or "").lower(), "lainnya"),
         decision=DECISION_DIRECT,
         severity="sedang" if risky_payment else "rendah",
         complaint=False,
@@ -317,6 +326,31 @@ def _next_shipping_day(day: date) -> date:
     return nxt
 
 
+_JEV_STATUS_EFFECT = {
+    "disabled": "Jev mati; keputusan dari mesin aturan.",
+    "timeout": "Jev melewati batas waktu 2 detik; keputusan dari mesin aturan.",
+    "error": "Jev error; keputusan dari mesin aturan.",
+    "circuit_open": "Jev dijeda 10 menit setelah 3 kegagalan; keputusan dari mesin aturan.",
+    "rate_limited": "Batas panggilan Jev per menit tercapai; keputusan dari mesin aturan.",
+}
+
+
+def _jev_effect(result: "jev.JevResult", already_cautious: bool, local_complaint: bool) -> str:
+    if not result.ok:
+        return _JEV_STATUS_EFFECT.get(result.status, "Jev tidak tersedia; keputusan dari mesin aturan.")
+    if result.says_complaint:
+        return "Jev setuju: keluhan." if local_complaint else "Jev MENAIKKAN pesan ini ke keluhan."
+    if result.says_uncertain:
+        return (
+            "Jev setuju: perlu dicek staf."
+            if already_cautious
+            else "Jev MENAIKKAN keputusan ke eskalasi (perlu dicek staf)."
+        )
+    if already_cautious:
+        return "Jev menilai pesan ini umum, tetapi mesin aturan lebih berhati-hati; keputusan aturan dipakai (Jev tidak boleh menurunkan)."
+    return "Jev setuju dengan mesin aturan; tidak ada perubahan keputusan."
+
+
 def analyze(
     db: Session,
     message: str,
@@ -328,6 +362,7 @@ def analyze(
     create_complaint: bool = True,
     actor: str | None = None,
     use_ai: bool = True,
+    jev_result: "jev.JevResult | None" = None,
 ) -> ChatResult:
     started = datetime.now()
     as_of = as_of or now_wib()
@@ -352,17 +387,14 @@ def analyze(
         )
 
     # --- Jev second opinion (proposal §4.2) --------------------------------
-    # Only consulted when the rule engine has NOT already reached the most
-    # cautious outcome; Jev may raise caution, never lower it.
+    # Jev is always asked (a few hundredths of a rupiah) so its decision can be shown
+    # next to the rule engine's. It may only RAISE caution, never lower it.
     already_cautious = injection or bool(high_risk) or local_complaint
-    if use_ai and not already_cautious:
-        jev_result = jev.classify(message, platform)
-    else:
-        jev_result = jev.JevResult(
-            ok=False,
-            status="skipped" if use_ai and settings.jev_ready else "disabled",
-            meta=jev.provider_info(),
-        )
+    if jev_result is None:
+        if use_ai:
+            jev_result = jev.classify(message, platform)
+        else:
+            jev_result = jev.JevResult(ok=False, status="disabled")
     provider = "rule-based+jev" if jev_result.ok else "rule-based"
     provider_status = jev_result.status
 
@@ -372,11 +404,13 @@ def analyze(
     if jev_result.says_complaint:
         complaint = True
         intent = "keluhan"
-        warnings.append("Jev menilai pesan ini keluhan; prioritas dinaikkan.")
+        if not local_complaint:
+            warnings.append("Jev menilai pesan ini keluhan; prioritas dinaikkan.")
     elif jev_result.says_uncertain:
         jev_escalate_reason = "Jev menilai pesan ini perlu diperiksa staf; draf tidak boleh langsung dikirim."
-    if jev_result.ok and jev_result.severity:
+    if jev_result.ok and jev_result.severity and (jev_result.says_complaint or jev_result.says_uncertain):
         severity = _strictest(severity, jev_result.severity)
+    jev_result.meta["panel"] = jev_result.panel(_jev_effect(jev_result, already_cautious, local_complaint))
 
     # --- Hard gate 1: prompt injection is data, never instruction. ---
     if injection:
@@ -1133,7 +1167,12 @@ def _derive_message_class(result: ChatResult) -> str:
 
 def _apply_jev_raise(result: ChatResult, reason: str | None) -> None:
     """Upgrade (never downgrade) a rule result when Jev asks for a human."""
-    if not reason or result.decision == DECISION_ESCALATE:
+    if not reason:
+        return
+    panel = result.provider_meta.get("panel") if isinstance(result.provider_meta, dict) else None
+    if result.decision == DECISION_ESCALATE:
+        if panel:
+            panel["effect"] = "Jev setuju: aturan sudah mengeskalasi pesan ini."
         return
     result.decision = DECISION_ESCALATE
     result.severity = _strictest(result.severity, "sedang")
