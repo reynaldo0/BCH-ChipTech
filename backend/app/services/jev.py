@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -39,8 +40,8 @@ CATEGORY_KELUHAN = "keluhan"
 
 SEVERITY_LEVELS = ["rendah", "sedang", "tinggi", "kritis"]
 
-# Probability a "raise caution" signal must reach before we act on it.
-RAISE_THRESHOLD = 0.6
+# Probability a "raise caution" signal must reach before we act on it
+# (settings.jev_raise_threshold, calibrated on real Jev output).
 
 QUESTIONS: dict[str, Any] = {
     "kategori": {
@@ -76,14 +77,6 @@ QUESTIONS: dict[str, Any] = {
             "false": "Pesan pembeli biasa tanpa perintah ke sistem.",
         },
     },
-    "perlu_staf": {
-        "type": "noul",
-        "instructions": "Apakah pesan ini sebaiknya diperiksa staf manusia sebelum dijawab?",
-        "criteria": {
-            "true": "Jawaban bergantung pada pemeriksaan fisik, data pesanan, atau keputusan staf.",
-            "false": "Jawaban cukup dari katalog, FAQ, atau aturan toko yang baku.",
-        },
-    },
     "urgensi": {
         "type": "score",
         "instructions": "Seberapa mendesak pesan ini ditangani?",
@@ -100,20 +93,23 @@ QUESTIONS: dict[str, Any] = {
 @dataclass
 class JevResult:
     ok: bool
-    status: str  # disabled | skipped | ok | timeout | error | circuit_open
+    status: str  # disabled | skipped | ok | timeout | error | circuit_open | rate_limited
     category: str | None = None
     category_probs: dict[str, float] = field(default_factory=dict)
     injection_prob: float | None = None
-    needs_human_prob: float | None = None
     severity: str | None = None
+    severity_score: float | None = None
     confidence: float | None = None
+    latency_ms: int | None = None
+    cached: bool = False
     meta: dict[str, Any] = field(default_factory=dict)
+    skip_reason: str | None = None
 
-    # --- Decisions derived for the "raise caution only" rule ----------------
+    # --- Derived "raise caution only" signals --------------------------------
     @property
     def says_complaint(self) -> bool:
         return self.ok and self.category == CATEGORY_KELUHAN and (
-            self.category_probs.get(CATEGORY_KELUHAN, 0.0) >= RAISE_THRESHOLD
+            self.category_probs.get(CATEGORY_KELUHAN, 0.0) >= settings.jev_raise_threshold
         )
 
     @property
@@ -121,12 +117,32 @@ class JevResult:
         if not self.ok:
             return False
         if self.category == CATEGORY_BELUM_PASTI and (
-            self.category_probs.get(CATEGORY_BELUM_PASTI, 0.0) >= RAISE_THRESHOLD
+            self.category_probs.get(CATEGORY_BELUM_PASTI, 0.0) >= settings.jev_raise_threshold
         ):
             return True
-        if (self.needs_human_prob or 0.0) >= RAISE_THRESHOLD:
-            return True
-        return (self.injection_prob or 0.0) >= RAISE_THRESHOLD
+        return (self.injection_prob or 0.0) >= settings.jev_raise_threshold
+
+    def panel(self, effect: str) -> dict[str, Any]:
+        """Everything the UI's "Keputusan Jev" panel shows (no secrets)."""
+        return {
+            "status": self.status,
+            "ok": self.ok,
+            "model": self.meta.get("served_model") or settings.jev_model,
+            "category": self.category,
+            "category_probs": {k: round(v, 4) for k, v in self.category_probs.items()},
+            "injection_prob": round(self.injection_prob, 4) if self.injection_prob is not None else None,
+            "severity": self.severity,
+            "severity_score": round(self.severity_score, 2) if self.severity_score is not None else None,
+            "latency_ms": self.latency_ms,
+            "cost_usd": self.meta.get("cost_usd"),
+            "input_tokens": self.meta.get("input_tokens"),
+            "request_id": self.meta.get("request_id"),
+            "cached": self.cached,
+            "threshold": settings.jev_raise_threshold,
+            "skip_reason": self.skip_reason,
+            "detail": self.meta.get("detail"),
+            "effect": effect,
+        }
 
 
 # --- Circuit breaker (process-local) ------------------------------------------
@@ -167,6 +183,83 @@ class _Breaker:
 breaker = _Breaker()
 
 
+class _Stats:
+    """Process-local counters shown in Pengaturan (cost control for production)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.reset()
+
+    def reset(self) -> None:
+        self.calls = 0
+        self.ok = 0
+        self.failed = 0
+        self.cache_hits = 0
+        self.rate_limited = 0
+        self.cost_usd = 0.0
+        self.latency_sum = 0
+        self._recent: deque[float] = deque()
+
+    def allow(self) -> bool:
+        """Sliding one-minute window so a runaway client cannot burn credit."""
+        with self._lock:
+            now = time.monotonic()
+            while self._recent and now - self._recent[0] > 60:
+                self._recent.popleft()
+            if len(self._recent) >= settings.jev_max_calls_per_minute:
+                self.rate_limited += 1
+                return False
+            self._recent.append(now)
+            return True
+
+    def record(self, ok: bool, latency_ms: int, cost: float | None) -> None:
+        with self._lock:
+            self.calls += 1
+            if ok:
+                self.ok += 1
+                self.latency_sum += latency_ms
+                self.cost_usd += float(cost or 0.0)
+            else:
+                self.failed += 1
+
+    def hit(self) -> None:
+        with self._lock:
+            self.cache_hits += 1
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "calls": self.calls,
+                "ok": self.ok,
+                "failed": self.failed,
+                "cache_hits": self.cache_hits,
+                "rate_limited": self.rate_limited,
+                "cost_usd": round(self.cost_usd, 6),
+                "avg_latency_ms": round(self.latency_sum / self.ok) if self.ok else None,
+            }
+
+
+stats = _Stats()
+_cache: dict[str, tuple[float, JevResult]] = {}
+_cache_lock = threading.Lock()
+
+
+def _cache_get(key: str) -> JevResult | None:
+    with _cache_lock:
+        hit = _cache.get(key)
+        if hit and time.monotonic() - hit[0] < settings.jev_cache_ttl_s:
+            return hit[1]
+        _cache.pop(key, None)
+    return None
+
+
+def _cache_put(key: str, result: JevResult) -> None:
+    with _cache_lock:
+        if len(_cache) > 2000:
+            _cache.clear()
+        _cache[key] = (time.monotonic(), result)
+
+
 def provider_info() -> dict[str, Any]:
     circuit_open = breaker.is_open()
     if not settings.jev_ready:
@@ -194,6 +287,9 @@ def provider_info() -> dict[str, Any]:
         "endpoint": settings.jev_endpoint,
         "timeout_ms": settings.jev_timeout_ms,
         "retries": settings.jev_retries,
+        "raise_threshold": settings.jev_raise_threshold,
+        "max_calls_per_minute": settings.jev_max_calls_per_minute,
+        "stats": stats.snapshot(),
         "circuit_open": circuit_open,
         "consecutive_failures": breaker.failures,
         "mode": mode,
@@ -237,11 +333,10 @@ def _parse(body: dict[str, Any]) -> JevResult:
         category=category,
         category_probs=probs,
         injection_prob=_prob((answers.get("injeksi") or {}).get("noul")),
-        needs_human_prob=_prob((answers.get("perlu_staf") or {}).get("noul")),
         severity=severity,
+        severity_score=score,
         confidence=_prob(kategori.get("confidence")),
         meta={
-            **provider_info(),
             "request_id": body.get("id"),
             "served_model": body.get("model"),
             "cost_usd": usage.get("cost"),
@@ -262,19 +357,30 @@ def _post(payload: dict[str, Any]) -> httpx.Response:
         return client.post(settings.jev_endpoint, json=payload, headers=headers)
 
 
-def classify(message: str, platform: str = "Shopee") -> JevResult:
+def classify(message: str, platform: str = "Shopee", use_cache: bool = True) -> JevResult:
     """Ask Jev for a second opinion. Never raises; failures return ok=False."""
     if not settings.jev_ready:
-        return JevResult(ok=False, status="disabled", meta=provider_info())
+        return JevResult(ok=False, status="disabled")
     if breaker.is_open():
-        return JevResult(ok=False, status="circuit_open", meta=provider_info())
+        return JevResult(ok=False, status="circuit_open")
+
+    masked = mask_pii(message)[:2000]
+    key = f"{platform}|{masked.strip().lower()}|{settings.jev_model}"
+    if use_cache:
+        cached = _cache_get(key)
+        if cached is not None:
+            stats.hit()
+            return JevResult(**{**cached.__dict__, "cached": True, "latency_ms": 0, "meta": dict(cached.meta)})
+    if not stats.allow():
+        return JevResult(ok=False, status="rate_limited")
 
     payload = {
         "model": settings.jev_model,
-        "state": f"Kanal: {platform}\nPesan pembeli: {mask_pii(message)[:2000]}",
+        "state": f"Kanal: {platform}\nPesan pembeli: {masked}",
         "questions": QUESTIONS,
     }
 
+    started = time.monotonic()
     last_status, last_detail = "error", ""
     for _attempt in range(1 + max(0, settings.jev_retries)):
         try:
@@ -287,7 +393,11 @@ def classify(message: str, platform: str = "Shopee") -> JevResult:
                     break
                 continue
             result = _parse(response.json())
+            result.latency_ms = int((time.monotonic() - started) * 1000)
             breaker.record_success()
+            stats.record(True, result.latency_ms, result.meta.get("cost_usd"))
+            if use_cache:
+                _cache_put(key, result)
             return result
         except httpx.TimeoutException:
             last_status, last_detail = "timeout", f"> {settings.jev_timeout_ms} ms"
@@ -295,8 +405,10 @@ def classify(message: str, platform: str = "Shopee") -> JevResult:
             last_status, last_detail = "error", str(exc)[:300]
 
     breaker.record_failure()
+    stats.record(False, 0, None)
     return JevResult(
         ok=False,
         status="circuit_open" if breaker.is_open() else last_status,
-        meta={**provider_info(), "detail": last_detail},
+        latency_ms=int((time.monotonic() - started) * 1000),
+        meta={"detail": last_detail},
     )

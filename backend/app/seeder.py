@@ -84,7 +84,7 @@ def seed_users(db: Session) -> None:
                 username=username,
                 display_name=display_name,
                 role=role,
-                password_hash=hash_password("kompas123"),
+                password_hash=hash_password(settings.seed_user_password or "kompas123"),
                 is_active=True,
             )
             db.add(user)

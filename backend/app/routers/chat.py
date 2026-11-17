@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime
 from typing import Any
@@ -72,7 +73,8 @@ def _serialise(res, original: str | None = None) -> dict[str, Any]:
         "confidence": float(res.confidence),
         "provider": res.provider,
         "provider_status": res.provider_status,
-        "provider_meta": res.provider_meta,
+        "provider_meta": {k: v for k, v in res.provider_meta.items() if k != "panel"},
+        "jev": res.provider_meta.get("panel"),
         "sku": res.sku,
         "product_name": res.product_name,
         "draft": res.draft,
@@ -123,6 +125,14 @@ def analyze_queue(
     messages = split_messages(payload.text)
     if not messages:
         raise HTTPException(status_code=400, detail="Tidak ada pesan yang bisa dipisahkan.")
+    use_ai = payload.prefer_provider != "rule-based"
+    # Jev calls are network-bound and independent: run them in parallel so a 50-message
+    # backlog takes about as long as the slowest call instead of the sum of all calls.
+    if use_ai and settings.jev_ready:
+        with ThreadPoolExecutor(max_workers=settings.jev_queue_workers) as pool:
+            jev_results = list(pool.map(lambda m: jev.classify(m, payload.platform), messages))
+    else:
+        jev_results = [None] * len(messages)
     items = []
     for index, message in enumerate(messages):
         res = chat_engine.analyze(
@@ -130,7 +140,8 @@ def analyze_queue(
             message=message,
             platform=payload.platform,
             actor=actor,
-            use_ai=payload.prefer_provider != "rule-based",
+            use_ai=use_ai,
+            jev_result=jev_results[index],
         )
         item = _serialise(res, message)
         item["position"] = index + 1

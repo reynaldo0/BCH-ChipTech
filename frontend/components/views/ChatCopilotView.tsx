@@ -11,6 +11,7 @@ import {
   ClassBadge,
   EvidenceList,
   HOLDING_REPLY,
+  JevPanel,
   Warnings,
   copyText,
   reportWrongRoute,
@@ -261,6 +262,8 @@ export function ChatCopilotView({ compact = false }: { compact?: boolean } = {})
               ) : null}
 
               <Warnings items={result.warnings} injection={result.injection} />
+
+              <JevPanel jev={result.jev} />
 
               <div>
                 <label className="field-label" htmlFor="ws-draft">

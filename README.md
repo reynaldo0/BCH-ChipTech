@@ -62,15 +62,23 @@ Jev (TypeSafe) adalah model keputusan bertipe; KOMPAS memakainya hanya sebagai
 
 Cara kerjanya (`backend/app/services/jev.py`, dipanggil dari `chat_engine.analyze`):
 
-- Request `POST https://openrouter.ai/api/alpha/decisions` dengan 4 pertanyaan bertipe:
-  `kategori` (choice: umum / belum_pasti / keluhan), `injeksi` (noul), `perlu_staf` (noul),
-  `urgensi` (score 0–3). Nomor HP dan rekening disamarkan sebelum dikirim.
-- Batas 2 detik + 1× ulang. Gagal → hasil mesin aturan dipakai apa adanya.
-- 3 kegagalan beruntun → Jev dijeda 10 menit (pemutus sirkuit), lencana "Mode aturan".
-- Jev **hanya boleh menaikkan kewaspadaan**: umum → belum pasti (eskalasi) atau keluhan
-  (probabilitas ≥ 0,6). Jev tidak dipanggil bila aturan sudah mendeteksi keluhan,
-  klaim berisiko, atau instruksi tersembunyi; Jev tidak pernah menulis draf atau
-  menghitung uang.
+- Request `POST https://openrouter.ai/api/alpha/decisions` dengan 3 pertanyaan bertipe:
+  `kategori` (choice: umum / belum_pasti / keluhan), `injeksi` (noul), `urgensi` (score 0-3).
+  Nomor HP dan rekening disamarkan sebelum dikirim.
+- **Panel "Keputusan Jev"** di Workspace CS dan Mode Antrean menampilkan probabilitas tiap
+  kategori, skor instruksi tersembunyi, urgensi, latensi, biaya, dan kalimat efeknya
+  ("Jev MENAIKKAN pesan ini ke keluhan" / "Jev setuju dengan mesin aturan").
+  Kotak **Uji Jev** di Pengaturan melempar satu pesan tanpa menyimpan apa pun.
+- Batas 2 detik + 1x ulang. Gagal: hasil mesin aturan dipakai. 3 kegagalan beruntun: jeda 10 menit.
+- Jev **hanya boleh menaikkan kewaspadaan**, dan hanya bila probabilitas >= 80%
+  (`JEV_RAISE_THRESHOLD`, dikalibrasi dari 100 panggilan Jev asli). Jev tidak pernah menulis
+  draf atau menghitung uang.
+- Kontrol biaya: cache pesan identik 10 menit, batas 120 panggilan/menit, statistik pemakaian
+  dan biaya di Pengaturan. Mode Antrean memanggil Jev paralel (20 pesan sekitar 3 detik).
+
+Hasil terukur dengan Jev asli (`typesafe/jev-1.14`): Golden Set 100 = 99/100; pesan bergaya
+baru yang tidak dikenali aturan: keluhan lolos sebagai umum turun dari 5 menjadi 0 (dari 24 pesan);
+rata-rata 615-775 ms dan sekitar Rp0,5 per panggilan.
 
 ## Kalkulasi laba dari CSV
 
@@ -113,8 +121,14 @@ python backend/scripts/test_direct.py
 Termasuk Golden Set 100 percakapan dari Lampiran 3 proposal (`test_golden100.py`) dan
 uji adaptor Jev tanpa jaringan (`test_jev.py`).
 
-## Catatan produksi
+## Produksi
 
-- Ganti `SESSION_SECRET` (≥32 karakter), set `DEMO_MODE=false`, dan pakai PostgreSQL via `DATABASE_URL`.
-- Atur `ALLOWED_ORIGINS` ke origin frontend yang sebenarnya.
-- Login demo (`/api/auth/switch-role`) hanya untuk demo; ganti dengan login berkata sandi sebelum dipakai sungguhan.
+Set `DEMO_MODE=false` di `backend/.env` dan `NEXT_PUBLIC_DEMO_MODE=false` di `frontend/.env.local`:
+
+- Backend **menolak menyala** bila `SESSION_SECRET` masih nilai contoh / kurang dari 32 karakter,
+  `SEED_USER_PASSWORD` kosong, atau `ALLOWED_ORIGINS` berisi `*`.
+- Pemilih peran tanpa kata sandi dan reset data dinonaktifkan (HTTP 403); login memakai
+  `/masuk` dengan username `owner`, `manager`, `cs`, `packing`, `judge` dan `SEED_USER_PASSWORD`
+  sebagai kata sandi awal. Login dibatasi 5 kegagalan per 5 menit.
+- Atur `ALLOWED_ORIGINS` ke origin frontend sebenarnya, dan pakai PostgreSQL lewat `DATABASE_URL`.
+- Data seed adalah data dummy; kosongkan atau ganti sebelum dipakai untuk toko nyata.

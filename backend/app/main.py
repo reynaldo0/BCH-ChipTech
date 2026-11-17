@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import settings
+from .config import production_problems, settings
 from .db import engine
 from .models import Base
 from .routers import (
@@ -34,6 +34,10 @@ def init_db():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not settings.demo_mode:
+        problems = production_problems(settings)
+        if problems:
+            raise RuntimeError("Konfigurasi produksi tidak aman:\n- " + "\n- ".join(problems))
     init_db()
     yield
     # Shutdown
@@ -76,6 +80,7 @@ def root():
         "docs_url": "/docs",
         "demo_mode": settings.demo_mode,
         "jev_enabled": settings.jev_enabled,
+        "jev_ready": settings.jev_ready,
     }
 
 

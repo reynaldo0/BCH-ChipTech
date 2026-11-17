@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
+import { ClassBadge, JevPanel, type ChatResult } from "./cs-shared"
 import {
   Settings,
   Shield,
@@ -666,13 +667,44 @@ export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () =>
 
 function JevStatusCard() {
   const [info, setInfo] = React.useState<Record<string, any> | null>(null)
-  React.useEffect(() => {
+  const [text, setText] = React.useState("")
+  const [probing, setProbing] = React.useState(false)
+  const [probe, setProbe] = React.useState<ChatResult | null>(null)
+  const [probeError, setProbeError] = React.useState("")
+
+  const loadInfo = React.useCallback(() => {
     api.get("/api/chat/provider").then(setInfo).catch(() => setInfo(null))
   }, [])
+  React.useEffect(() => {
+    loadInfo()
+  }, [loadInfo])
+
+  async function runProbe() {
+    if (!text.trim()) return
+    setProbing(true)
+    setProbeError("")
+    try {
+      // persist:false -> nothing is stored and no complaint ticket is created.
+      const res = await api.post<ChatResult>("/api/chat/analyze", {
+        message: text.trim(),
+        persist: false,
+        create_complaint: false,
+        prefer_provider: "auto",
+      })
+      setProbe(res)
+      loadInfo()
+    } catch (err) {
+      setProbeError(err instanceof Error ? err.message : "Uji Jev gagal.")
+    } finally {
+      setProbing(false)
+    }
+  }
+
   if (!info) return null
   const active = info.mode === "jev"
+  const stats = info.stats ?? {}
   return (
-    <section className="card card-pad space-y-2" aria-labelledby="jev-title">
+    <section className="card card-pad space-y-3" aria-labelledby="jev-title">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="jev-title" className="font-display text-base font-semibold text-ink-950">AI opsional: Jev (TypeSafe) via OpenRouter</h2>
         <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${active ? "border-brand-200 bg-brand-50 text-brand-800" : "border-border bg-ink-50 text-ink-700"}`}>
@@ -685,7 +717,64 @@ function JevStatusCard() {
         <div><dt className="inline text-ink-500">Kunci API: </dt><dd className="inline">{info.key_present ? "terpasang" : "belum diisi"}</dd></div>
         <div><dt className="inline text-ink-500">Batas waktu: </dt><dd className="inline">{info.timeout_ms} ms + {info.retries}× ulang</dd></div>
         <div><dt className="inline text-ink-500">Gagal beruntun: </dt><dd className="inline">{info.consecutive_failures} (jeda 10 menit setelah 3)</dd></div>
+        <div><dt className="inline text-ink-500">Ambang menaikkan: </dt><dd className="inline">{Math.round((info.raise_threshold ?? 0.8) * 100)}%</dd></div>
+        <div><dt className="inline text-ink-500">Batas panggilan: </dt><dd className="inline">{info.max_calls_per_minute}/menit</dd></div>
       </dl>
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Pemakaian sejak backend menyala">
+        {[
+          ["Panggilan", stats.calls ?? 0],
+          ["Berhasil", stats.ok ?? 0],
+          ["Dari cache", stats.cache_hits ?? 0],
+          ["Latensi rata-rata", stats.avg_latency_ms != null ? `${stats.avg_latency_ms} ms` : "—"],
+        ].map(([k, v]) => (
+          <div key={k as string} className="rounded-md border border-border p-2.5">
+            <dt className="text-[11.5px] text-ink-500">{k}</dt>
+            <dd className="tnum text-base font-semibold text-ink-950">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-[12.5px] text-ink-600">
+        Biaya sejak backend menyala: <strong className="tnum">${(stats.cost_usd ?? 0).toFixed(6)}</strong> (≈Rp{((stats.cost_usd ?? 0) * 16500).toFixed(2)}).
+        {stats.failed ? <> Gagal: {stats.failed}.</> : null}
+        {stats.rate_limited ? <> Ditolak batas: {stats.rate_limited}.</> : null}
+      </p>
+
+      <div className="border-t border-border pt-3">
+        <label className="field-label" htmlFor="jev-probe">Uji Jev: lempar satu pesan pembeli</label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            id="jev-probe"
+            className="field-control"
+            maxLength={2000}
+            value={text}
+            placeholder="mis. Barangnya lecet semua pas dibuka, mau dikembaliin"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void runProbe()}
+          />
+          <button
+            type="button"
+            onClick={() => void runProbe()}
+            disabled={probing || !text.trim()}
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-brand-800 bg-primary px-4 text-[13px] font-medium text-primary-foreground hover:bg-brand-800 disabled:opacity-50"
+          >
+            {probing ? "Memproses…" : "Kirim ke Jev"}
+          </button>
+        </div>
+        <p className="mt-1 text-[11.5px] text-ink-500">Tidak disimpan dan tidak membuat tiket keluhan.</p>
+        {probeError ? <p role="alert" className="mt-2 text-[13px] text-danger-700">{probeError}</p> : null}
+        {probe ? (
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-[13px]">
+              <span className="text-ink-500">Keputusan akhir KOMPAS:</span>
+              <ClassBadge value={probe.message_class} />
+              <span className="font-mono text-[12px] text-ink-700">{probe.decision}</span>
+            </div>
+            <JevPanel jev={probe.jev} />
+            <p className="rounded-md bg-ink-50 p-2.5 text-[12.5px] text-ink-700"><strong>Draf dari mesin aturan:</strong> {probe.draft}</p>
+          </div>
+        ) : null}
+      </div>
+
       <p className="text-[12px] text-ink-500">
         Jev hanya boleh menaikkan kewaspadaan (umum → belum pasti/keluhan), tidak pernah menulis jawaban atau menghitung uang.
         Aktifkan dengan <code className="font-mono">JEV_ENABLED=true</code> dan <code className="font-mono">OPENROUTER_API_KEY</code> di <code className="font-mono">backend/.env</code>, lalu mulai ulang backend.
