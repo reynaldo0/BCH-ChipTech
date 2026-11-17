@@ -36,6 +36,20 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class AccountRequest(Base):
+    __tablename__ = "account_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(128))
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    requested_role: Mapped[str] = mapped_column(String(32), default="cs")
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
 class Product(Base):
     __tablename__ = "products"
 

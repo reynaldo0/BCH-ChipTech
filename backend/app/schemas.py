@@ -16,6 +16,22 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class AccountRequestCreate(BaseModel):
+    display_name: str = Field(min_length=2, max_length=128)
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    requested_role: Literal["manager", "cs", "packing", "judge"] = "cs"
+
+
+class AccountDecision(BaseModel):
+    action: Literal["approve", "reject"]
+    role: Literal["manager", "cs", "packing", "judge"] | None = None
+
+
+class UserRoleChange(BaseModel):
+    role: Literal["owner", "manager", "cs", "packing", "judge"]
+
+
 class UserOut(ORMModel):
     id: int
     username: str

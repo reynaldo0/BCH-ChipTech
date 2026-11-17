@@ -28,9 +28,9 @@ def test_safe_production_config_passes(monkeypatch):
 
 def test_role_switch_and_reset_disabled_outside_demo(monkeypatch):
     with TestClient(app) as client:
-        owner = client.post("/api/auth/switch-role", json={"role": "owner"}).json()["token"]
+        owner = client.post("/api/auth/login", json={"username": "owner", "password": "kompas123"}).json()["token"]
         monkeypatch.setattr(settings, "demo_mode", False)
-        assert client.post("/api/auth/switch-role", json={"role": "owner"}).status_code == 403
+        assert client.post("/api/auth/switch-role", json={"role": "owner"}).status_code == 404
         headers = {"Authorization": f"Bearer {owner}"}
         assert client.post("/api/settings/reset-demo", headers=headers).status_code == 403
 

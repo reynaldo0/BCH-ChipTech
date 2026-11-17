@@ -14,7 +14,7 @@ client = _ctx.__enter__()  # run lifespan: create tables + seed demo data
 
 
 def _token(role: str) -> dict:
-    token = client.post("/api/auth/switch-role", json={"role": role}).json()["token"]
+    token = client.post("/api/auth/login", json={"username": role, "password": "kompas123"}).json()["token"]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -26,6 +26,17 @@ def test_healthz():
     resp = client.get("/healthz")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+def test_login_supports_all_roles_without_client_selected_role():
+    for role in ("owner", "manager", "cs", "packing", "judge"):
+        resp = client.post(
+            "/api/auth/login",
+            json={"username": role, "password": "kompas123"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["user"]["role"] == role
+        assert resp.json()["token"]
 
 
 def test_products_list():
