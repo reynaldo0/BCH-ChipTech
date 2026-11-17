@@ -105,7 +105,7 @@
   }
 
   .eyebrow {
-    @apply font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-ink-500;
+    @apply text-[11px] font-medium tracking-[0.12em] text-ink-500;
   }
 
   .divider {
@@ -173,6 +173,47 @@
 
   .font-display { font-family: var(--font-display), var(--font-sans), sans-serif; }
   .font-mono { font-family: var(--font-mono), ui-monospace, monospace; }
+
+  .tooltip-trigger {
+    position: relative;
+  }
+  .tooltip-trigger::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    z-index: 80;
+    left: 50%;
+    bottom: calc(100% + 0.5rem);
+    width: max-content;
+    max-width: 16rem;
+    transform: translate(-50%, 0.25rem);
+    border: 1px solid hsl(var(--sidebar-border));
+    border-radius: 0.5rem;
+    background: hsl(var(--sidebar));
+    padding: 0.4rem 0.65rem;
+    color: hsl(var(--sidebar-foreground));
+    font-family: var(--font-sans), sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease, transform 140ms ease;
+    white-space: nowrap;
+  }
+  .tooltip-trigger:hover::after,
+  .tooltip-trigger:focus-visible::after {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  .sidebar .tooltip-trigger::after {
+    left: calc(100% + 0.5rem);
+    bottom: 50%;
+    transform: translate(-0.25rem, 50%);
+  }
+  .sidebar .tooltip-trigger:hover::after,
+  .sidebar .tooltip-trigger:focus-visible::after {
+    transform: translate(0, 50%);
+  }
 }
 
 @layer utilities {
