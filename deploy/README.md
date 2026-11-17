@@ -5,7 +5,7 @@ Deployment layout:
 - Frontend: Vercel at `https://kompasdev.my.id`
 - API: VPS at `https://api.kompasdev.my.id`
 - FastAPI container: port `8005`
-- Caddy: TLS termination and reverse proxy on ports `80`/`443`
+- Nginx on the VPS: TLS termination and reverse proxy on ports `80`/`443`
 - Persistent MySQL database: Docker volume `kompas_mysql_data`
 - Persistent import uploads: Docker volume `kompas_uploads`
 
@@ -19,8 +19,8 @@ www.kompasdev.my.id   CNAME  <your-vercel-domain>
 api.kompasdev.my.id   A      <VPS_PUBLIC_IP>
 ```
 
-Point the Vercel domain from the Vercel dashboard. Caddy obtains the API certificate
-automatically after `api.kompasdev.my.id` resolves to the VPS.
+Point the Vercel domain from the Vercel dashboard. Nginx and Certbot will provide the
+API HTTPS certificate after `api.kompasdev.my.id` resolves to the VPS.
 
 ## 2. VPS prerequisites
 
@@ -33,9 +33,8 @@ sudo ufw allow 443/tcp
 sudo ufw enable
 ```
 
-Port `8005` is published for direct health checks, but public API traffic should use
-the HTTPS domain through Caddy. Restrict port `8005` to trusted IPs in the VPS
-firewall if direct access is not needed.
+The backend is bound to `127.0.0.1:8005`; public API traffic must use the HTTPS domain
+through Nginx.
 
 ## 3. Deploy the API
 
@@ -67,7 +66,6 @@ docker compose build --pull
 docker compose up -d
 docker compose ps
 curl -f http://127.0.0.1:8005/healthz
-curl -f https://api.kompasdev.my.id/healthz
 ```
 
 On first startup MySQL initializes inside the `db` container. The application
@@ -87,15 +85,86 @@ Useful operations:
 ```bash
 docker compose logs -f backend
 docker compose restart backend
-docker compose pull caddy
-docker compose up -d caddy
 docker compose down
 ```
 
 Do not run `docker compose down -v` unless the MySQL database and uploaded
 files are intentionally being deleted.
 
-## 4. Configure Vercel
+## 4. Configure Nginx and HTTPS
+
+Install Nginx and Certbot:
+
+```bash
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
+
+Create the Nginx virtual host:
+
+```bash
+sudo tee /etc/nginx/sites-available/kompas-api >/dev/null <<'EOF'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.kompasdev.my.id;
+
+    location / {
+        proxy_pass http://127.0.0.1:8005;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
+EOF
+
+sudo ln -sfn /etc/nginx/sites-available/kompas-api /etc/nginx/sites-enabled/kompas-api
+sudo nginx -t
+sudo systemctl reload nginx
+sudo certbot --nginx -d api.kompasdev.my.id
+```
+
+Test:
+
+```bash
+curl -f https://api.kompasdev.my.id/healthz
+```
+
+### Jika port 80 atau 443 sudah dipakai
+
+Nginx harus memakai port `80` dan `443` untuk HTTP redirect serta sertifikat HTTPS.
+Cari proses yang sedang memakai port tersebut terlebih dahulu:
+
+```bash
+sudo ss -ltnp | grep -E ':(80|443)\b'
+docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Ports}}'
+```
+
+Jika Nginx sudah berjalan, jangan dihentikan. Tambahkan virtual host `kompas-api`
+seperti di atas. Jika Apache yang memakai port dan tidak diperlukan, hentikan:
+
+```bash
+sudo systemctl stop apache2
+sudo systemctl disable apache2
+sudo systemctl reload nginx
+```
+
+Jika pemakainya container lama, hentikan hanya container yang ditampilkan oleh `docker ps`
+dan memang tidak diperlukan:
+
+```bash
+docker stop <CONTAINER_ID>
+docker compose up -d
+```
+
+Jangan memindahkan port Nginx ke port lain untuk production sebelum DNS atau reverse proxy
+di depannya dikonfigurasi ulang. Setelah Nginx aktif, periksa juga `443` karena biasanya
+port tersebut ikut bentrok.
+
+## 5. Configure Vercel
 
 In the Vercel project settings, add these Production environment variables:
 
@@ -107,7 +176,7 @@ NEXT_PUBLIC_DEMO_MODE=false
 Redeploy after saving the variables. Preview deployments can use the same API only
 after their Vercel origin is added to `ALLOWED_ORIGINS`.
 
-## 5. Smoke test
+## 6. Smoke test
 
 ```bash
 curl -i https://api.kompasdev.my.id/healthz
