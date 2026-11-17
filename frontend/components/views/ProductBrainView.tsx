@@ -34,6 +34,7 @@ export function ProductBrainView() {
 
   // Quick stock edit
   const [editStockModal, setEditStockModal] = useState<any | null>(null)
+  const costHidden = products.length > 0 && Boolean(products[0]?.cost_hidden)
   const [newStockVal, setNewStockVal] = useState<number>(0)
   const [savingStock, setSavingStock] = useState(false)
 
@@ -164,18 +165,17 @@ export function ProductBrainView() {
                     <th className="py-3 px-3 font-semibold">Nama Produk</th>
                     <th className="py-3 px-3 font-semibold">Kategori</th>
                     <th className="py-3 px-3 font-semibold text-right">Stok Fisik</th>
-                    <th className="py-3 px-3 font-semibold text-right">Modal (COGS)</th>
+                    {!costHidden && <th className="py-3 px-3 font-semibold text-right">Modal</th>}
                     <th className="py-3 px-3 font-semibold text-right">Harga Jual</th>
-                    <th className="py-3 px-3 font-semibold text-right">Margin Ref %</th>
-                    <th className="py-3 px-3 font-semibold text-center">Izin Resmi</th>
+                    {!costHidden && <th className="py-3 px-3 font-semibold text-right">Margin acuan</th>}
+                    <th className="py-3 px-3 font-semibold text-center">Dokumen</th>
                     <th className="py-3 px-4 font-semibold text-center">Status Stok</th>
                     <th className="py-3 px-3 font-semibold text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-kompas-border/60">
                   {filteredProducts.map((p) => {
-                    const isHealthy = p.stock_state === "AMAN" || p.stock > 10
-                    const isLow = p.stock_state === "MENIPIS" || (p.stock > 0 && p.stock <= 10)
+                    const isLow = p.stock > 0 && p.stock <= 10
                     const isOut = p.stock <= 0
 
                     return (
@@ -190,28 +190,23 @@ export function ProductBrainView() {
                         <td className="py-3 px-3 text-right font-bold text-deep-teal tabular-nums">
                           {p.stock} <span className="font-normal text-[10px] text-gray-400">{p.unit}</span>
                         </td>
-                        <td className="py-3 px-3 text-right font-medium tabular-nums text-gray-600">
-                          {formatIDR(p.modal)}
-                        </td>
+                        {!costHidden && (
+                          <td className="py-3 px-3 text-right font-medium tabular-nums text-gray-600">
+                            {formatIDR(p.modal)}
+                          </td>
+                        )}
                         <td className="py-3 px-3 text-right font-semibold tabular-nums text-deep-teal">
                           {formatIDR(p.price)}
                         </td>
-                        <td className="py-3 px-3 text-right font-bold text-kompas-green">
-                          {p.margin_ref_pct ? `${p.margin_ref_pct}%` : "-"}
-                        </td>
+                        {!costHidden && (
+                          <td className="py-3 px-3 text-right font-bold text-kompas-green">
+                            {p.margin_ref_pct ? `${p.margin_ref_pct}%` : "-"}
+                          </td>
+                        )}
                         <td className="py-3 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {p.has_halal && (
-                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
-                                HALAL
-                              </span>
-                            )}
-                            {p.has_bpom && (
-                              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-800">
-                                BPOM
-                              </span>
-                            )}
-                          </div>
+                          <span className="text-[11px] text-gray-500" title="Dokumen demo; klaim halal/BPOM/alergen tetap wajib cek label oleh staf (OPS-024, OPS-025)">
+                            {p.evidence_count ? `${p.evidence_count} dok. simulasi` : "—"}
+                          </span>
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span
@@ -225,6 +220,13 @@ export function ProductBrainView() {
                           >
                             {isOut ? "HABIS" : isLow ? "MENIPIS" : "AMAN"}
                           </span>
+                          {p.stock_state === "STALE" ? (
+                            <span className="mt-1 block text-[10px] font-semibold text-amber-700">⚠ Perlu update (&gt;24 jam)</span>
+                          ) : p.stock_updated_at ? (
+                            <span className="mt-1 block text-[10px] text-gray-400">
+                              {new Date(p.stock_updated_at).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} WIB
+                            </span>
+                          ) : null}
                         </td>
                         <td className="py-3 px-3 text-center">
                           <button
@@ -388,7 +390,7 @@ export function ProductBrainView() {
                 </div>
               </div>
               <div className="rounded-xl bg-canvas p-3 border">
-                <div className="text-gray-500">Modal (COGS)</div>
+                <div className="text-gray-500">Modal</div>
                 <div className="text-lg font-bold text-gray-700">
                   {formatIDR(selectedProduct.product.modal)}
                 </div>

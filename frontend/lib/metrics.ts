@@ -7,6 +7,31 @@ export type AttentionItem = {
 }
 
 export type OverviewResponse = {
+  finance_visible?: boolean
+  contribution?: {
+    gross_sales: string
+    dana_dilepas: string
+    lk1: string
+    lk1_margin_pct: string | null
+    lk1_status: string
+    lk2_status: string
+    lk2_rows_missing: number
+  } | null
+  top_sku_lk1?: Array<{
+    sku: string
+    product_name: string | null
+    qty: number
+    gross_sales: string
+    lk1: string
+    lk1_margin_pct: string | null
+    break_even_price: string | null
+    data_warnings: string[]
+  }>
+  complaints_summary?: Record<string, any>
+  operations?: {
+    shipping_rule?: { cutoff_weekday: string; cutoff_saturday: string; daily_capacity: number }
+    today_capacity?: { capacity: number; used: number; remaining: number; is_closed: boolean }
+  }
   kpi?: {
     gross_sales?: string | number | null
     profit_complete?: string | number | null
@@ -23,6 +48,8 @@ export type OverviewResponse = {
     marketplace: string
     gross_sales?: string | number | null
     profit_complete?: string | number | null
+    lk1?: string | null
+    lk1_margin_pct?: string | null
     transaction_count?: number
   }>
   top_products?: Array<{

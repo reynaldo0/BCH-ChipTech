@@ -22,22 +22,29 @@ import { Alert } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { api, setSessionToken, type Role } from "@/lib/api"
+import { useProviderMode } from "./views/cs-shared"
 import { DEMO_LABEL, ROLE_LABELS } from "@/lib/navigation"
 import { cn } from "@/lib/utils"
 
-type NavItem = { href: string; label: string; icon: LucideIcon }
+type NavItem = { href: string; label: string; icon: LucideIcon; roles?: Role[] }
+const FINANCE: Role[] = ["owner", "manager", "judge"]
 const navigation: { label: string; items: NavItem[] }[] = [
   { label: "Ringkasan", items: [{ href: "/", label: "Beranda", icon: LayoutDashboard }] },
   {
-    label: "Operasional",
+    label: "Layanan pelanggan",
     items: [
-      { href: "/laba", label: "Pesanan & Laba", icon: BarChart3 },
-      { href: "/keluhan", label: "Keluhan", icon: CircleHelp },
-      { href: "/produk", label: "Produk & Stok", icon: Boxes },
+      { href: "/asisten", label: "Workspace CS", icon: MessageCircle },
+      { href: "/keluhan", label: "Keluhan & eskalasi", icon: CircleHelp },
     ],
   },
-  { label: "Bantuan", items: [{ href: "/asisten", label: "Asisten", icon: MessageCircle }] },
-  { label: "Sistem", items: [{ href: "/pengaturan", label: "Pengaturan", icon: Settings }] },
+  {
+    label: "Data toko",
+    items: [
+      { href: "/produk", label: "Produk & Stok", icon: Boxes },
+      { href: "/laba", label: "Laba Kontribusi", icon: BarChart3, roles: FINANCE },
+    ],
+  },
+  { label: "Sistem", items: [{ href: "/pengaturan", label: "Pengaturan & audit", icon: Settings, roles: ["owner", "manager", "judge"] }] },
 ]
 
 function isActive(pathname: string, href: string) {
@@ -51,6 +58,7 @@ export function AppShell({ children, title, description }: { children: React.Rea
   const [role, setRole] = useState<Role>("owner")
   const [switchingRole, setSwitchingRole] = useState(false)
   const [roleError, setRoleError] = useState("")
+  const providerMode = useProviderMode()
 
   useEffect(() => {
     const savedRole = window.localStorage.getItem("kompas_role") as Role | null
@@ -135,7 +143,10 @@ export function AppShell({ children, title, description }: { children: React.Rea
         </div>
 
         <nav className="scrollbar-thin flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label="Navigasi utama">
-          {navigation.map((group) => (
+          {navigation
+            .map((group) => ({ ...group, items: group.items.filter((item) => !item.roles || item.roles.includes(role)) }))
+            .filter((group) => group.items.length)
+            .map((group) => (
             <div key={group.label}>
               <p className="mb-1.5 px-3 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/50">
                 {group.label}
@@ -203,20 +214,21 @@ export function AppShell({ children, title, description }: { children: React.Rea
               </div>
             </div>
             <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
-              <select aria-label="Periode" defaultValue="30" className="field-control h-9 min-w-0 flex-1 sm:w-40 sm:flex-none">
-                <option value="30">30 hari terakhir</option>
-                <option value="7">7 hari terakhir</option>
-              </select>
-              <select aria-label="Channel" defaultValue="semua" className="field-control h-9 min-w-0 flex-1 sm:w-36 sm:flex-none">
-                <option value="semua">Semua channel</option>
-                <option>Shopee</option>
-                <option>TikTok Shop</option>
-                <option>Lazada</option>
-              </select>
-              <Button onClick={() => setAssistantOpen(true)} aria-label="Tanya asisten">
-                <MessageCircle />
-                <span className="hidden md:inline">Tanya asisten</span>
-              </Button>
+              {providerMode ? (
+                <Badge
+                  tone={providerMode.mode === "jev" ? "brand" : "neutral"}
+                  className="hidden sm:inline-flex"
+                  title={providerMode.reason}
+                >
+                  {providerMode.mode_label}
+                </Badge>
+              ) : null}
+              {pathname !== "/asisten" ? (
+                <Button onClick={() => setAssistantOpen(true)} aria-label="Buka analisis pesan cepat">
+                  <MessageCircle />
+                  <span className="hidden md:inline">Analisis pesan</span>
+                </Button>
+              ) : null}
             </div>
           </div>
         </header>
@@ -232,7 +244,7 @@ export function AppShell({ children, title, description }: { children: React.Rea
       {/* ── Drawer Asisten ──────────────────────────────────────────────── */}
       <AnimatePresence>
         {assistantOpen ? (
-          <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Asisten">
+          <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Analisis pesan cepat">
             <motion.button
               className="absolute inset-0 bg-ink-950/40"
               onClick={() => setAssistantOpen(false)}
@@ -254,8 +266,8 @@ export function AppShell({ children, title, description }: { children: React.Rea
                     <MessageCircle className="h-4 w-4" />
                   </span>
                   <div className="min-w-0">
-                    <h2 className="font-display text-base font-semibold text-ink-950">Asisten</h2>
-                    <p className="text-[13px] text-ink-600">Buat jawaban dari data toko yang tersedia.</p>
+                    <h2 className="font-display text-base font-semibold text-ink-950">Analisis pesan cepat</h2>
+                    <p className="text-[13px] text-ink-600">Draf bersumber dari katalog, FAQ, dan aturan toko.</p>
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setAssistantOpen(false)} aria-label="Tutup asisten">

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import AuditLog, FeeRule, User
 from ..schemas import FeeRuleOut
-from ..security import get_current_user_optional, require_role
+from ..security import get_current_user_optional, require_admin, require_finance, require_role
 from ..seeder import seed_all
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -29,7 +29,7 @@ class FeeRuleCreate(BaseModel):
 
 
 @router.get("/fee-rules")
-def list_fee_rules(db: Session = Depends(get_db)):
+def list_fee_rules(db: Session = Depends(get_db), _user: User = Depends(require_finance)):
     rules = db.scalars(select(FeeRule).order_by(FeeRule.marketplace, FeeRule.effective_from.desc())).all()
     return {
         "fee_rules": [
@@ -54,9 +54,9 @@ def list_fee_rules(db: Session = Depends(get_db)):
 def create_fee_rule(
     payload: FeeRuleCreate,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(require_admin),
 ):
-    actor = current_user.username if current_user else "admin"
+    actor = current_user.username
     fee = FeeRule(
         marketplace=payload.marketplace,
         category=payload.category,
@@ -88,6 +88,7 @@ def list_audit_logs(
     limit: int = 50,
     action: str | None = None,
     db: Session = Depends(get_db),
+    _user: User = Depends(require_finance),
 ):
     query = select(AuditLog).order_by(AuditLog.created_at.desc())
     if action:
@@ -113,9 +114,9 @@ def list_audit_logs(
 @router.post("/reset-demo")
 def reset_demo_database(
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(require_admin),
 ):
-    actor = current_user.username if current_user else "admin"
+    actor = current_user.username
     seed_all(force=True)
     return {
         "message": "Basis data demo berhasil di-reset ulang ke kondisi awal lengkap.",

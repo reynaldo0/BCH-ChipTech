@@ -2,5 +2,5 @@ import { AppShell } from "@/components/AppShell"
 import { ProfitEngineView } from "@/components/views/ProfitEngineView"
 
 export default function LabaPage() {
-  return <AppShell title="Pesanan & Laba" description="Periksa hasil penjualan, selisih biaya, dan dampak perubahan harga."><ProfitEngineView /></AppShell>
+  return <AppShell title="Laba Kontribusi" description="Unggah laporan marketplace, lihat laba per SKU, kanal, dan periode sampai ke baris transaksi."><ProfitEngineView /></AppShell>
 }

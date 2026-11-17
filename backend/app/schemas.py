@@ -141,7 +141,7 @@ class FaqOut(ORMModel):
 
 
 class ChatAnalyzeRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=4000)
+    message: str = Field(min_length=1, max_length=2000)
     platform: str = "Shopee"
     sku_context: str | None = None
     conversation_id: str | None = None

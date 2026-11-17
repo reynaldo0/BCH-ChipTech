@@ -112,6 +112,8 @@ class ParsedFile:
     delimiter: str | None = None
     sheet_name: str | None = None
     sheet_names: list[str] = field(default_factory=list)
+    row_numbers: list[int] = field(default_factory=list)
+    cleaning: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -122,6 +124,7 @@ class PreviewResult:
     preview_rows: list[dict[str, Any]]
     issues: list[dict[str, Any]]
     sheet_names: list[str]
+    cleaning: dict[str, Any] = field(default_factory=dict)
 
 
 def _normalise_header(value: str) -> str:
@@ -164,6 +167,74 @@ def _detect_delimiter(sample: str) -> str:
     return max(counts, key=counts.get) if max(counts.values()) > 0 else ","
 
 
+HEADER_SCAN_ROWS = 15
+NOISE_PREFIXES = ("total", "grand total", "subtotal", "sub total", "jumlah total", "catatan", "note", "notes", "keterangan")
+FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def normalise_marketplace_param(value: str | None) -> str | None:
+    if not value or value.strip().lower() in {"", "auto", "semua", "all"}:
+        return None
+    return _normalise_marketplace(value, None) or value
+
+
+def _header_score(cells: list[str]) -> int:
+    known = set()
+    for target in STANDARD_FIELDS:
+        known.add(_normalise_header(target))
+        known.update(_normalise_header(s) for s in SYNONYMS.get(target, []))
+    return sum(1 for cell in cells if _normalise_header(str(cell)) in known)
+
+
+def _clean_table(raw_rows: list[list[str]]) -> tuple[list[str], list[list[str]], list[int], dict[str, Any]]:
+    """Cleaning layer C2-C3 (proposal §4.3).
+
+    C2: find the header row by scanning the top 15 rows for known column names.
+    C3: drop blank rows, Total/Catatan rows, repeated headers and rows that only
+        hold a single merged-cell value.
+    """
+    header_index = 0
+    best = -1
+    for index, row in enumerate(raw_rows[:HEADER_SCAN_ROWS]):
+        score = _header_score(row)
+        if score >= 3 and score > best:
+            header_index, best = index, score
+            if score >= 5:
+                break
+    headers = _clean_headers([str(c) for c in raw_rows[header_index]])
+    header_norm = [_normalise_header(h) for h in headers]
+    dropped = {"above_header": header_index, "blank": 0, "total_or_note": 0, "repeated_header": 0, "merged_or_sparse": 0}
+    rows: list[list[str]] = []
+    numbers: list[int] = []
+    for offset, row in enumerate(raw_rows[header_index + 1 :], start=header_index + 2):
+        values = [str(c).strip() for c in row]
+        filled = [v for v in values if v]
+        if not filled:
+            dropped["blank"] += 1
+            continue
+        first = _normalise_header(filled[0])
+        if any(first == p or first.startswith(p + " ") for p in NOISE_PREFIXES):
+            dropped["total_or_note"] += 1
+            continue
+        if [_normalise_header(v) for v in values[: len(header_norm)]] == header_norm:
+            dropped["repeated_header"] += 1
+            continue
+        if len(filled) < 2:
+            dropped["merged_or_sparse"] += 1
+            continue
+        if len(values) > len(headers):
+            values = values[: len(headers)]
+        rows.append(values + [""] * (len(headers) - len(values)))
+        numbers.append(offset)
+    info = {
+        "header_row": header_index + 1,
+        "dropped": dropped,
+        "dropped_total": sum(dropped.values()),
+        "kept_rows": len(rows),
+    }
+    return headers, rows, numbers, info
+
+
 def parse_file(filename: str, content: bytes, sheet_name: str | None = None) -> ParsedFile:
     suffix = Path(filename).suffix.lower()
     if suffix not in {".csv", ".xlsx"}:
@@ -184,11 +255,10 @@ def parse_file(filename: str, content: bytes, sheet_name: str | None = None) -> 
             raise ImportErrorDetail("EMPTY_FILE", "File CSV tidak berisi data.")
         delimiter = _detect_delimiter(text[:8192])
         reader = csv.reader(io.StringIO(text), delimiter=delimiter)
-        rows = [row for row in reader if any(cell.strip() for cell in row)]
-        if len(rows) < 2:
+        raw_rows = [row for row in reader]
+        headers, data_rows, numbers, info = _clean_table(raw_rows)
+        if not data_rows:
             raise ImportErrorDetail("NO_DATA", "File harus memiliki header dan minimal satu baris data.")
-        headers = _clean_headers(rows[0])
-        data_rows = rows[1:]
         if len(headers) > settings.import_max_columns:
             raise ImportErrorDetail(
                 "TOO_MANY_COLUMNS",
@@ -199,12 +269,9 @@ def parse_file(filename: str, content: bytes, sheet_name: str | None = None) -> 
                 "TOO_MANY_ROWS",
                 f"Jumlah baris melebihi batas {settings.import_max_rows}.",
             )
-        normalised = []
-        for row in data_rows:
-            if len(row) > len(headers):
-                row = row[: len(headers)]
-            normalised.append(row + [""] * (len(headers) - len(row)))
-        return ParsedFile(headers=headers, rows=normalised, delimiter=delimiter)
+        return ParsedFile(
+            headers=headers, rows=data_rows, delimiter=delimiter, row_numbers=numbers, cleaning=info
+        )
 
     # XLSX: server-side parser, read-only, no macro execution.
     try:
@@ -232,25 +299,22 @@ def parse_file(filename: str, content: bytes, sheet_name: str | None = None) -> 
     for row in sheet.iter_rows(values_only=True):
         if row is None:
             continue
-        values = ["" if cell is None else str(cell) for cell in row]
-        if any(value.strip() for value in values):
-            raw_rows.append(values)
-    if len(raw_rows) < 2:
+        raw_rows.append(["" if cell is None else str(cell) for cell in row])
+    headers, data_rows, numbers, info = _clean_table(raw_rows) if raw_rows else ([], [], [], {})
+    if not data_rows:
         raise ImportErrorDetail("NO_DATA", "Sheet harus memiliki header dan minimal satu baris data.", {"sheets": sheet_names})
-    headers = _clean_headers(raw_rows[0])
     if len(headers) > settings.import_max_columns:
         raise ImportErrorDetail("TOO_MANY_COLUMNS", f"Jumlah kolom melebihi batas {settings.import_max_columns}.")
-    data_rows = raw_rows[1:]
     if len(data_rows) > settings.import_max_rows:
         raise ImportErrorDetail("TOO_MANY_ROWS", f"Jumlah baris melebihi batas {settings.import_max_rows}.")
-    norm_rows = []
-    for row in data_rows:
-        row = list(row)
-        if len(row) > len(headers):
-            row = row[: len(headers)]
-        norm_rows.append(row + [""] * (len(headers) - len(row)))
-    return ParsedFile(headers=headers, rows=norm_rows, sheet_name=selected, sheet_names=sheet_names)
-
+    return ParsedFile(
+        headers=headers,
+        rows=data_rows,
+        sheet_name=selected,
+        sheet_names=sheet_names,
+        row_numbers=numbers,
+        cleaning=info,
+    )
 
 def suggest_mapping(headers: list[str]) -> dict[str, str]:
     normalised = {header: _normalise_header(header) for header in headers}
@@ -323,6 +387,28 @@ def _row_dict(headers: list[str], row: list[str], mapping: dict[str, str]) -> di
     return result
 
 
+def _id_counts(parsed: ParsedFile, mapping: dict[str, str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for raw_row in parsed.rows:
+        tx_id = _row_dict(parsed.headers, raw_row, mapping).get("transaction_id", "").strip()
+        if tx_id:
+            counts[tx_id] = counts.get(tx_id, 0) + 1
+    return counts
+
+
+def _apply_line_key(row: dict[str, str], counts: dict[str, int]) -> None:
+    """One order may hold several SKUs: the line key becomes ORDER#SKU.
+
+    A row is a duplicate only when the same (order, SKU) pair appears twice,
+    matching the unique index (no_pesanan, sku) in proposal Tabel 4.1.
+    """
+    tx_id = row.get("transaction_id", "").strip()
+    sku = row.get("sku", "").strip().upper()
+    if tx_id and sku and counts.get(tx_id, 0) > 1:
+        row["order_id"] = row.get("order_id", "").strip() or tx_id
+        row["transaction_id"] = f"{tx_id}#{sku}"
+
+
 def _validate_row(
     row: dict[str, str],
     marketplace_default: str | None,
@@ -345,6 +431,19 @@ def _validate_row(
             )
     if issues:
         return None, issues
+
+    for text_field in ("transaction_id", "order_id", "sku"):
+        raw_text = row.get(text_field, "")
+        if raw_text and raw_text.startswith(FORMULA_PREFIXES):
+            return None, [
+                {
+                    "row_number": row_number,
+                    "field": text_field,
+                    "value": raw_text[:60],
+                    "reason": "Sel diawali karakter rumus (=, +, -, @); baris dikarantina demi keamanan.",
+                    "severity": "ERROR",
+                }
+            ]
 
     tx_date = _parse_date(row.get("transaction_date"))
     if tx_date is None:
@@ -505,8 +604,10 @@ def create_preview(
     duplicate_rows = 0
     unmatched = 0
 
-    for offset, raw_row in enumerate(parsed.rows, start=2):
+    id_counts = _id_counts(parsed, mapping)
+    for offset, raw_row in zip(parsed.row_numbers, parsed.rows):
         row = _row_dict(parsed.headers, raw_row, mapping)
+        _apply_line_key(row, id_counts)
         tx_id = row.get("transaction_id", "").strip()
         if tx_id and (tx_id in seen_ids or tx_id in existing_ids):
             duplicate_rows += 1
@@ -608,6 +709,7 @@ def create_preview(
         preview_rows=preview_rows,
         issues=issues[:200],
         sheet_names=parsed.sheet_names,
+        cleaning=parsed.cleaning,
     )
 
 
@@ -660,8 +762,10 @@ def confirm_import(
     unmatched = 0
     valid_rows = 0
 
-    for offset, raw_row in enumerate(parsed.rows, start=2):
+    id_counts = _id_counts(parsed, mapping)
+    for offset, raw_row in zip(parsed.row_numbers, parsed.rows):
         row = _row_dict(parsed.headers, raw_row, mapping)
+        _apply_line_key(row, id_counts)
         tx_id = row.get("transaction_id", "").strip()
         if not tx_id or tx_id in seen_ids or tx_id in existing_ids:
             duplicate_rows += 1
@@ -772,30 +876,28 @@ def confirm_import(
 
 
 def template_csv(marketplace: str) -> str:
+    """KOMPAS standard CSV. HPP may stay empty: modal is taken from Product Brain."""
     headers = [
-        "Order ID",
-        "Order Date",
-        "SKU",
-        "Qty",
-        "Gross Sales",
-        "Seller Discount",
-        "Refund",
-        "COGS",
-        "Commission",
-        "Fixed Fee",
-        "Seller Shipping",
-        "Packing Cost",
-        "Return Logistics",
-        "Other Cost",
+        "No. Pesanan", "Tanggal Pesanan", "Marketplace", "SKU", "Jumlah", "Subtotal",
+        "Diskon Penjual", "Refund", "Komisi", "Biaya Admin", "Ongkir Penjual",
+        "Biaya Packing", "Logistik Retur", "Biaya Lain",
     ]
+    # Example rows use the demo fee rules valid from 1 Nov 2026 (Shopee 9%, TikTok 7%, Lazada 8%).
     sample = {
-        "Shopee": ["DEMO-SHP-0001", "2026-11-02", "KRM-AJW-250", "2", "90000", "0", "0", "64000", "7200", "1250", "0", "1500", "0", "0"],
-        "TikTok Shop": ["DEMO-TTS-0001", "2026-11-02", "KRM-AJW-250", "2", "90000", "0", "0", "64000", "5850", "1000", "0", "1500", "0", "0"],
-        "Lazada": ["DEMO-LZD-0001", "2026-11-02", "KRM-AJW-250", "2", "90000", "0", "0", "64000", "6750", "1500", "0", "1500", "0", "0"],
+        "Shopee": [
+            ["SHP-261102-001", "2026-11-02", "Shopee", "KRM-AJW-250", "2", "90000", "0", "0", "8100", "1250", "0", "1500", "0", "0"],
+            ["SHP-261102-002", "2026-11-02", "Shopee", "KCG-ARB-500", "1", "29000", "0", "0", "2610", "1250", "0", "1500", "0", "0"],
+        ],
+        "TikTok Shop": [
+            ["TTS-261102-001", "2026-11-02", "TikTok Shop", "KRM-AJW-250", "2", "90000", "0", "0", "6300", "1000", "0", "1500", "0", "0"],
+        ],
+        "Lazada": [
+            ["LZD-261102-001", "2026-11-02", "Lazada", "KRM-AJW-250", "2", "90000", "0", "0", "7200", "1500", "0", "1500", "0", "0"],
+        ],
     }
-    selected = sample.get(marketplace, sample["Shopee"])
+    key = SUPPORTED_MARKETPLACES.get(marketplace) or MARKETPLACE_ALIASES.get(marketplace.lower(), "Shopee")
     output = io.StringIO()
     writer = csv.writer(output, lineterminator="\r\n")
     writer.writerow(headers)
-    writer.writerow(selected)
+    writer.writerows(sample.get(key, sample["Shopee"]))
     return output.getvalue()

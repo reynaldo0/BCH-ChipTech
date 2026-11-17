@@ -24,6 +24,7 @@ from ..models import (
     CalculationRun,
     FeeRule,
     Product,
+    StockSnapshot,
     Transaction,
     TransactionCalculation,
 )
@@ -138,6 +139,8 @@ class ProfitInput:
     duplicate_transaction: bool = False
     duplicate_fixed_fee_order: bool = False
     source_status: str = "completed"
+    fixed_fee_allocated: bool = False
+    order_fixed_fee_total: Decimal | None = None
 
 
 @dataclass
@@ -246,17 +249,32 @@ def calculate(data: ProfitInput) -> ProfitResult:
         expected_commission = q2(
             gross * (rule.commission_pct + rule.admin_pct) / Decimal("100")
         )
+        # Nothing is charged on a line whose net sale is zero (e.g. 100% voucher).
+        fully_discounted = net_revenue is not None and net_revenue <= 0
         if commission is None:
-            commission = expected_commission
+            commission = ZERO if fully_discounted else expected_commission
             commission_source = "fee_rule"
+        elif fully_discounted and q2(commission) == ZERO:
+            pass
         elif abs(q2(commission) - expected_commission) > Decimal("2"):
             warnings.append(
                 "Komisi transaksi tidak cocok dengan fee rule "
                 f"(input {q2(commission)}, acuan {expected_commission})."
             )
-        if fixed_fee is None:
+        if data.fixed_fee_allocated:
+            fixed_fee_source = "order_allocation"
+            if data.order_fixed_fee_total is not None and abs(
+                q2(data.order_fixed_fee_total) - q2(rule.fixed_fee)
+            ) > Decimal("2"):
+                warnings.append(
+                    "Biaya tetap pesanan tidak cocok dengan fee rule "
+                    f"(input {q2(data.order_fixed_fee_total)}, acuan {q2(rule.fixed_fee)})."
+                )
+        elif fixed_fee is None:
             fixed_fee = q2(rule.fixed_fee)
             fixed_fee_source = "fee_rule"
+        elif fully_discounted and q2(fixed_fee) == ZERO:
+            pass
         elif abs(q2(fixed_fee) - q2(rule.fixed_fee)) > Decimal("2"):
             warnings.append(
                 "Biaya tetap transaksi tidak cocok dengan fee rule "
@@ -344,6 +362,7 @@ def calculate(data: ProfitInput) -> ProfitResult:
         "cogs_source": cogs_source,
         "commission_source": commission_source,
         "fixed_fee_source": fixed_fee_source,
+        "order_fixed_fee_total": str(data.order_fixed_fee_total) if data.order_fixed_fee_total is not None else None,
         "fee_rule": rule.to_dict() if rule else None,
         "missing": missing,
         "reconciliation": list(dict.fromkeys(reconciliation)),
@@ -369,9 +388,12 @@ def profit_input_from_transaction(
     fee_rule: FeeRule | None,
     duplicate_transaction: bool = False,
     duplicate_fixed_fee_order: bool = False,
+    allocation: tuple[Decimal, Decimal] | None = None,
 ) -> ProfitInput:
     other = [tx.other_costs] if tx.other_costs is not None else None
     return ProfitInput(
+        fixed_fee_allocated=allocation is not None,
+        order_fixed_fee_total=allocation[1] if allocation else None,
         transaction_id=tx.transaction_id,
         transaction_date=tx.transaction_date,
         marketplace=tx.marketplace,
@@ -383,7 +405,7 @@ def profit_input_from_transaction(
         refund_amount=tx.refund_amount,
         cogs=tx.cogs,
         marketplace_commission=tx.marketplace_commission,
-        fixed_fee=tx.fixed_fee,
+        fixed_fee=allocation[0] if allocation else tx.fixed_fee,
         seller_shipping_cost=tx.seller_shipping_cost,
         packing_cost=tx.packing_cost,
         return_logistics_cost=tx.return_logistics_cost,
@@ -395,6 +417,40 @@ def profit_input_from_transaction(
         duplicate_fixed_fee_order=duplicate_fixed_fee_order,
         source_status=tx.status,
     )
+
+
+def allocate_order_fixed_fees(transactions: list[Transaction]) -> dict[int, tuple[Decimal, Decimal]]:
+    """Allocate an order-level fixed fee across its SKU lines by product value.
+
+    Applies when exactly one line of a multi-SKU order carries the fee and the
+    other lines state 0. The remainder goes to the last line so the allocated
+    shares sum back to the order fee with Rp0 tolerance (proposal §3.3 rule 2).
+    """
+    by_order: dict[str, list[Transaction]] = {}
+    for tx in transactions:
+        if tx.order_id:
+            by_order.setdefault(tx.order_id, []).append(tx)
+    result: dict[int, tuple[Decimal, Decimal]] = {}
+    for lines in by_order.values():
+        if len(lines) < 2 or any(t.fixed_fee is None for t in lines):
+            continue
+        carriers = [t for t in lines if t.fixed_fee > 0]
+        if len(carriers) != 1:
+            continue
+        total_fee = q2(carriers[0].fixed_fee)
+        gross_sum = sum((t.gross_sales or ZERO for t in lines), ZERO)
+        if gross_sum <= 0:
+            continue
+        ordered = sorted(lines, key=lambda t: t.id)
+        remaining = total_fee
+        for index, tx in enumerate(ordered):
+            if index < len(ordered) - 1:
+                share = q2(total_fee * (tx.gross_sales or ZERO) / gross_sum)
+            else:
+                share = remaining
+            remaining -= share
+            result[tx.id] = (share, total_fee)
+    return result
 
 
 def latest_run(db: Session) -> CalculationRun | None:
@@ -447,11 +503,13 @@ def run_calculation(
         order_id: count
         for order_id, count in db.execute(
             select(Transaction.order_id, func.count())
-            .where(Transaction.order_id.is_not(None), Transaction.fixed_fee.is_not(None))
+            .where(Transaction.order_id.is_not(None), Transaction.fixed_fee > 0)
             .group_by(Transaction.order_id)
             .having(func.count() > 1)
         ).all()
     }
+
+    allocations = allocate_order_fixed_fees(transactions)
 
     run = CalculationRun(
         formula_version=settings.formula_version,
@@ -472,6 +530,7 @@ def run_calculation(
             fee_rule,
             duplicate_transaction=tx.transaction_id in duplicate_counts,
             duplicate_fixed_fee_order=bool(tx.order_id and tx.order_id in fixed_fee_orders),
+            allocation=allocations.get(tx.id),
         )
         result = calculate(data)
         status_counts[result.status] = status_counts.get(result.status, 0) + 1
@@ -539,6 +598,48 @@ def _filtered_calculations(
     return [(calc, tx) for calc, tx in db.execute(stmt).all()]
 
 
+DEDUCTION_COMPONENTS = (
+    "marketplace_commission",
+    "fixed_fee",
+    "seller_shipping_cost",
+    "return_logistics_cost",
+    "other_costs",
+)
+
+
+def contribution_levels(trace: dict[str, Any], gross: Decimal) -> dict[str, Any]:
+    """Proposal Tabel 3.3 profit tiers, computed from one calculation trace.
+
+    Dana dilepas = omzet - diskon - refund - komisi - biaya tetap - ongkir penjual
+                   - logistik retur - biaya lain
+    LK I         = dana dilepas - modal (modal x qty)
+    LK II        = LK I - biaya variabel toko (packing)
+    A missing component is never treated as zero: the tier becomes None.
+    """
+    inputs = trace.get("inputs") or {}
+    comps = trace.get("components") or {}
+    missing_dana = [k for k in ("seller_discount", "refund_amount") if inputs.get(k) is None]
+    missing_dana += [k for k in DEDUCTION_COMPONENTS if comps.get(k) is None]
+    dana = None
+    if not missing_dana:
+        dana = gross - Decimal(inputs["seller_discount"]) - Decimal(inputs["refund_amount"])
+        dana -= sum((Decimal(str(comps[k])) for k in DEDUCTION_COMPONENTS), ZERO)
+    cogs = comps.get("cogs")
+    lk1 = dana - Decimal(str(cogs)) if dana is not None and cogs is not None else None
+    packing = comps.get("packing_cost")
+    lk2 = lk1 - Decimal(str(packing)) if lk1 is not None and packing is not None else None
+    missing_lk1 = missing_dana + (["cogs"] if cogs is None else [])
+    missing_lk2 = missing_lk1 + (["packing_cost"] if packing is None else [])
+    return {
+        "dana": dana,
+        "cogs": Decimal(str(cogs)) if cogs is not None else None,
+        "lk1": lk1,
+        "lk2": lk2,
+        "missing_lk1": missing_lk1,
+        "missing_lk2": missing_lk2,
+    }
+
+
 def _money(value: Decimal | None) -> Decimal | None:
     return q2(value) if value is not None else None
 
@@ -597,6 +698,9 @@ def build_summary(
     marketplace_acc: dict[str, dict[str, Any]] = {}
     day_acc: dict[str, dict[str, Any]] = {}
     product_acc: dict[str, dict[str, Any]] = {}
+    lk_totals = {"dana": ZERO, "lk1": ZERO, "lk2": ZERO, "gross_lk1": ZERO}
+    lk_missing = {"lk1_rows": 0, "lk2_rows": 0}
+    sku_lk: dict[str, dict[str, Any]] = {}
 
     for calc, tx in rows:
         status_counts[calc.status] = status_counts.get(calc.status, 0) + 1
@@ -622,6 +726,41 @@ def build_summary(
             else:
                 component_totals[key] += Decimal(str(value))
 
+        levels = contribution_levels(trace, gross) if calc.status != STATUS_INVALID else None
+        sk = sku_lk.setdefault(
+            tx.sku,
+            {"qty": 0, "gross": ZERO, "dana": ZERO, "cogs": ZERO, "lk1": ZERO, "lk2": ZERO,
+             "rows": 0, "rows_lk1_missing": 0, "rows_lk2_missing": 0, "missing": set(),
+             "marketplaces": set(), "recon_rows": 0, "negative_rows": 0},
+        )
+        sk["qty"] += tx.qty
+        sk["rows"] += 1
+        sk["marketplaces"].add(tx.marketplace)
+        if calc.status == STATUS_RECON:
+            sk["recon_rows"] += 1
+        if levels is None or levels["lk1"] is None:
+            lk_missing["lk1_rows"] += 1
+            sk["rows_lk1_missing"] += 1
+            sk["missing"].update(levels["missing_lk1"] if levels else ["gross_sales"])
+        else:
+            lk_totals["dana"] += levels["dana"]
+            lk_totals["lk1"] += levels["lk1"]
+            lk_totals["gross_lk1"] += gross
+            sk["gross"] += gross
+            sk["dana"] += levels["dana"]
+            sk["cogs"] += levels["cogs"]
+            sk["lk1"] += levels["lk1"]
+            if levels["lk1"] < 0:
+                sk["negative_rows"] += 1
+        if levels is None or levels["lk2"] is None:
+            lk_missing["lk2_rows"] += 1
+            sk["rows_lk2_missing"] += 1
+            if levels:
+                sk["missing"].update(levels["missing_lk2"])
+        else:
+            lk_totals["lk2"] += levels["lk2"]
+            sk["lk2"] += levels["lk2"]
+
         if calc.status == STATUS_COMPLETE:
             net_complete += calc.net_revenue or ZERO
             profit_complete += calc.profit or ZERO
@@ -635,10 +774,16 @@ def build_summary(
         market = tx.marketplace
         m = marketplace_acc.setdefault(
             market,
-            {"marketplace": market, "gross_sales": ZERO, "net_revenue_complete": ZERO, "profit_complete": ZERO, "profit_partial_estimate": ZERO, "transaction_count": 0, "status_counts": {}},
+            {"marketplace": market, "gross_sales": ZERO, "net_revenue_complete": ZERO, "profit_complete": ZERO, "profit_partial_estimate": ZERO, "transaction_count": 0, "status_counts": {}, "dana_dilepas": ZERO, "lk1": ZERO, "gross_lk1": ZERO, "lk1_rows_missing": 0},
         )
         m["gross_sales"] += gross
         m["transaction_count"] += 1
+        if levels is not None and levels["lk1"] is not None:
+            m["dana_dilepas"] += levels["dana"]
+            m["lk1"] += levels["lk1"]
+            m["gross_lk1"] += gross
+        else:
+            m["lk1_rows_missing"] += 1
         m["status_counts"][calc.status] = m["status_counts"].get(calc.status, 0) + 1
         if calc.status == STATUS_COMPLETE:
             m["net_revenue_complete"] += calc.net_revenue or ZERO
@@ -709,6 +854,82 @@ def build_summary(
         product_rows.append(row)
     product_rows.sort(key=lambda row: Decimal(row["profit_complete"]), reverse=True)
 
+    stock_by_sku: dict[str, int | None] = {}
+    modal_by_sku: dict[str, Decimal | None] = {}
+    name_by_sku: dict[str, str] = {}
+    for product in db.scalars(select(Product)):
+        modal_by_sku[product.sku] = product.modal
+        name_by_sku[product.sku] = product.name
+        snap = db.scalar(
+            select(StockSnapshot)
+            .where(StockSnapshot.product_id == product.id)
+            .order_by(StockSnapshot.captured_at.desc())
+            .limit(1)
+        )
+        stock_by_sku[product.sku] = snap.stock if snap else None
+
+    by_sku = []
+    for sku_code, item in sku_lk.items():
+        gross_sku = item["gross"]
+        deduction_rate = (gross_sku - item["dana"]) / gross_sku if gross_sku > 0 else None
+        modal_unit = modal_by_sku.get(sku_code)
+        break_even = None
+        if modal_unit is not None and deduction_rate is not None and deduction_rate < 1:
+            break_even = q2(modal_unit / (Decimal("1") - deduction_rate))
+        complete_lk1 = item["rows_lk1_missing"] == 0
+        complete_lk2 = item["rows_lk2_missing"] == 0
+        warnings_sku = []
+        if sku_code not in modal_by_sku:
+            warnings_sku.append("SKU tidak ada di katalog (unmatched).")
+        if stock_by_sku.get(sku_code) == 0:
+            warnings_sku.append("Stok katalog 0 tetapi tercatat terjual: peringatan data.")
+        by_sku.append({
+            "sku": sku_code,
+            "product_name": name_by_sku.get(sku_code),
+            "marketplaces": sorted(item["marketplaces"]),
+            "qty": item["qty"],
+            "rows": item["rows"],
+            "gross_sales": str(q2(gross_sku)),
+            "dana_dilepas": str(q2(item["dana"])),
+            "deduction_pct": str(q4(deduction_rate * Decimal("100"))) if deduction_rate is not None else None,
+            "cogs": str(q2(item["cogs"])),
+            "lk1": str(q2(item["lk1"])),
+            "lk1_margin_pct": str(q4(item["lk1"] / gross_sku * Decimal("100"))) if gross_sku > 0 else None,
+            "lk2": str(q2(item["lk2"])) if complete_lk2 else None,
+            "modal_unit": str(q2(modal_unit)) if modal_unit is not None else None,
+            "break_even_price": str(break_even) if break_even is not None else None,
+            "lk1_status": "Lengkap" if complete_lk1 else "Belum lengkap",
+            "lk2_status": "Lengkap" if complete_lk2 else "Belum lengkap",
+            "rows_incomplete": item["rows_lk1_missing"],
+            "missing_components": sorted(COMPONENT_LABELS.get(m, m) for m in item["missing"]),
+            "negative_rows": item["negative_rows"],
+            "reconciliation_rows": item["recon_rows"],
+            "data_warnings": warnings_sku,
+        })
+    by_sku.sort(key=lambda row: Decimal(row["lk1"]), reverse=True)
+
+    contribution = {
+        "gross_sales": str(q2(gross_total)),
+        "gross_sales_lk1_basis": str(q2(lk_totals["gross_lk1"])),
+        "dana_dilepas": str(q2(lk_totals["dana"])),
+        "lk1": str(q2(lk_totals["lk1"])),
+        "lk1_margin_pct": str(q4(lk_totals["lk1"] / lk_totals["gross_lk1"] * Decimal("100"))) if lk_totals["gross_lk1"] > 0 else None,
+        "lk1_status": "Lengkap" if lk_missing["lk1_rows"] == 0 else "Belum lengkap",
+        "lk1_rows_missing": lk_missing["lk1_rows"],
+        "lk2": str(q2(lk_totals["lk2"])) if lk_missing["lk2_rows"] == 0 else None,
+        "lk2_partial": str(q2(lk_totals["lk2"])),
+        "lk2_status": "Lengkap" if lk_missing["lk2_rows"] == 0 else "Belum lengkap",
+        "lk2_rows_missing": lk_missing["lk2_rows"],
+        "operating_profit": None,
+        "operating_profit_note": "Laba operasional (LK II - gaji, sewa) di luar cakupan KOMPAS.",
+        "definitions": {
+            "dana_dilepas": "Omzet - diskon - refund - komisi - biaya tetap - ongkir penjual - logistik retur - biaya lain",
+            "lk1": "Dana dilepas - modal produk (modal x qty)",
+            "lk2": "LK I - biaya variabel toko (packing)",
+            "break_even_price": "Modal / (1 - tingkat potongan SKU), asumsi tingkat potongan tetap",
+        },
+    }
+
     cost_breakdown = [
         {
             "component": key,
@@ -746,9 +967,18 @@ def build_summary(
             STATUS_LABELS.get(key, key): value for key, value in status_counts.items()
         },
         "status_counts_raw": status_counts,
-        "by_marketplace": [serialise_accumulator(value) for value in marketplace_acc.values()],
+        "by_marketplace": [
+            {
+                **serialise_accumulator(value),
+                "deduction_pct": str(q4((value["gross_lk1"] - value["dana_dilepas"]) / value["gross_lk1"] * Decimal("100"))) if value["gross_lk1"] > 0 else None,
+                "lk1_margin_pct": str(q4(value["lk1"] / value["gross_lk1"] * Decimal("100"))) if value["gross_lk1"] > 0 else None,
+            }
+            for value in sorted(marketplace_acc.values(), key=lambda v: -v["gross_sales"])
+        ],
         "by_day": [serialise_accumulator(value) for value in sorted(day_acc.values(), key=lambda x: x["date"])],
         "top_products": product_rows[:8],
+        "contribution": contribution,
+        "by_sku": by_sku,
         "cost_breakdown": cost_breakdown,
         "missing_components": [
             {"component": key, "label": COMPONENT_LABELS.get(key, key), "transaction_count": value}

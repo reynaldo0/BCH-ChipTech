@@ -121,7 +121,7 @@ export function ComplaintsView() {
     }
   }
 
-  const counts = stats?.counts || {}
+  const counts = stats?.status_counts || {}
 
   return (
     <div className="space-y-6 pb-16">

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ArrowRight, Info, PackageX, RefreshCw, ShieldCheck, TrendingUp, Wallet } from "lucide-react"
+import { AlertTriangle, ArrowRight, Info, ListOrdered, MessageCircle, RefreshCw, ShieldCheck, TrendingUp, Truck, Wallet } from "lucide-react"
 import { api } from "@/lib/api"
 import { actionableItems, completenessLabel, formatPercent, formatRupiah, numberValue, OverviewResponse } from "@/lib/metrics"
 import { Alert } from "@/components/ui/alert"
@@ -54,7 +54,7 @@ export function HomeDashboard() {
   const status = completenessLabel(kpi)
   const statusTone = (kpi.reconciliation_count ?? 0) > 0 ? "danger" : (kpi.partial_count ?? 0) > 0 ? "warning" : "success"
   const channels = data.by_marketplace || []
-  const maxProfit = Math.max(1, ...channels.map((c) => Math.abs(numberValue(c.profit_complete) ?? 0)))
+  const maxProfit = Math.max(1, ...channels.map((c) => Math.abs(numberValue(c.lk1) ?? 0)))
 
   return (
     <div className="space-y-8">
@@ -75,8 +75,7 @@ export function HomeDashboard() {
           ) : (
             items.map((item) => {
               const s = levelStyle[item.level] ?? levelStyle.warning
-              const href =
-                item.link === "/profit" ? "/laba?filter=RECONCILIATION_REQUIRED" : item.link === "/complaints" ? "/keluhan?severity=tinggi" : "/produk?filter=stok"
+              const href = item.link || "/"
               return (
                 <div key={`${item.type}-${item.title}`} className="flex flex-col gap-3 p-4 transition-colors hover:bg-ink-50/60 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 gap-3.5">
@@ -103,99 +102,119 @@ export function HomeDashboard() {
         </div>
       </section>
 
-      {/* KPI */}
-      <section>
-        <p className="eyebrow">Ringkasan 30 hari terakhir</p>
-        <div className="mt-3 grid gap-4 md:grid-cols-3">
-          <StatCard label="Penjualan kotor" value={formatRupiah(kpi.gross_sales)} detail={`${total} transaksi`} icon={<Wallet />} tone="brand" />
-          <StatCard
-            label="Laba bersih"
-            value={formatRupiah(kpi.profit_complete)}
-            detail={kpi.margin_complete_pct ? `Margin ${formatPercent(kpi.margin_complete_pct)}` : "Menunggu data lengkap"}
-            icon={<TrendingUp />}
-            tone="success"
-          />
-          <StatCard
-            label="Kelengkapan data biaya"
-            value={formatPercent(kpi.completeness_pct)}
-            detail={`${complete} dari ${total} transaksi lengkap`}
-            icon={<ShieldCheck />}
-            tone={statusTone}
-            badge={<Badge tone={statusTone}>{status}</Badge>}
-          />
-        </div>
-      </section>
+      {!data.finance_visible ? (
+        <section className="grid gap-4 md:grid-cols-3">
+          <Link href="/asisten" className="card card-pad block transition-colors hover:border-brand-300">
+            <MessageCircle className="h-5 w-5 text-brand-700" />
+            <h3 className="mt-2 font-semibold text-ink-950">Workspace CS</h3>
+            <p className="mt-1 text-[13px] text-ink-600">Tempel pesan pembeli, salin draf bersumber dengan Enter.</p>
+          </Link>
+          <Link href="/asisten?mode=antrean" className="card card-pad block transition-colors hover:border-brand-300">
+            <ListOrdered className="h-5 w-5 text-brand-700" />
+            <h3 className="mt-2 font-semibold text-ink-950">Mode antrean</h3>
+            <p className="mt-1 text-[13px] text-ink-600">Tempel banyak pesan; keluhan otomatis di urutan teratas.</p>
+          </Link>
+          <div className="card card-pad">
+            <Truck className="h-5 w-5 text-brand-700" />
+            <h3 className="mt-2 font-semibold text-ink-950">Batas kirim</h3>
+            <p className="mt-1 text-[13px] text-ink-600">
+              Senin–Jumat {data.operations?.shipping_rule?.cutoff_weekday ?? "14:00"} WIB · Sabtu {data.operations?.shipping_rule?.cutoff_saturday ?? "12:00"} WIB · Minggu tidak kirim.
+            </p>
+          </div>
+        </section>
+      ) : (
+        <>
+          {/* KPI */}
+          <section>
+            <p className="eyebrow">Semua data transaksi yang sudah diunggah</p>
+            <div className="mt-3 grid gap-4 md:grid-cols-3">
+              <StatCard label="Omzet" value={formatRupiah(kpi.gross_sales)} detail={`${total} baris produk · dana dilepas ${formatRupiah(data.contribution?.dana_dilepas)}`} icon={<Wallet />} tone="brand" />
+              <StatCard
+                label="Laba Kontribusi I"
+                value={formatRupiah(data.contribution?.lk1)}
+                detail={data.contribution?.lk1_margin_pct ? `Margin ${formatPercent(data.contribution.lk1_margin_pct)} dari omzet · omzet − potongan − modal` : "Menunggu data lengkap"}
+                icon={<TrendingUp />}
+                tone="success"
+              />
+              <StatCard
+                label="Kelengkapan data biaya"
+                value={formatPercent(kpi.completeness_pct)}
+                detail={`${complete} dari ${total} baris lengkap · LK II ${data.contribution?.lk2_status?.toLowerCase() ?? "—"}`}
+                icon={<ShieldCheck />}
+                tone={statusTone}
+                badge={<Badge tone={statusTone}>{status}</Badge>}
+              />
+            </div>
+          </section>
 
-      {/* Channel & produk */}
-      <section className="grid gap-6 lg:grid-cols-[1fr_1.35fr]">
-        <div className="card overflow-hidden">
-          <div className="border-b border-line-soft px-5 py-4">
-            <p className="eyebrow">Performa</p>
-            <h2 className="mt-1 text-lg">Laba per channel</h2>
-          </div>
-          <div className="divide-y divide-line-soft">
-            {channels.length === 0 ? <p className="p-5 text-sm text-ink-600">Belum ada data channel.</p> : null}
-            {channels.map((channel) => {
-              const profit = numberValue(channel.profit_complete)
-              return (
-                <div key={channel.marketplace} className="space-y-2 px-5 py-4 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <MarketplaceBadge marketplace={channel.marketplace} className="text-[13px] text-ink-900" />
-                    <span className={cn("font-semibold tabular-nums", profit !== null && profit < 0 ? "text-danger-700" : "text-ink-950")}>
-                      {formatRupiah(channel.profit_complete)}
-                    </span>
-                  </div>
-                  <Progress value={(Math.abs(profit ?? 0) / maxProfit) * 100} tone={profit !== null && profit < 0 ? "danger" : "brand"} />
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="card overflow-hidden">
-          <div className="border-b border-line-soft px-5 py-4">
-            <p className="eyebrow">Produk</p>
-            <h2 className="mt-1 text-lg">Produk terlaris</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Produk</th>
-                  <th className="text-right">Terjual</th>
-                  <th className="text-right">Stok</th>
-                  <th className="text-right">Laba</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.top_products || []).slice(0, 5).map((product) => {
-                  const lowStock = product.stock !== null && product.stock !== undefined && product.stock <= 0
+          {/* Channel & produk */}
+          <section className="grid gap-6 lg:grid-cols-[1fr_1.35fr]">
+            <div className="card overflow-hidden">
+              <div className="border-b border-line-soft px-5 py-4">
+                <p className="eyebrow">Kanal</p>
+                <h2 className="mt-1 text-lg">Laba Kontribusi I per kanal</h2>
+              </div>
+              <div className="divide-y divide-line-soft">
+                {channels.length === 0 ? <p className="p-5 text-sm text-ink-600">Belum ada data kanal.</p> : null}
+                {channels.map((channel) => {
+                  const profit = numberValue(channel.lk1)
                   return (
-                    <tr key={product.sku}>
-                      <td>
-                        <div className="font-semibold text-ink-950">{product.product_name || product.sku}</div>
-                        <div className="font-mono text-[11px] text-ink-500">{product.sku}</div>
-                      </td>
-                      <td className="text-right tabular-nums">{product.qty ?? "—"}</td>
-                      <td className="text-right tabular-nums">
-                        {lowStock ? (
-                          <Badge tone="danger" icon={<PackageX className="h-3 w-3" />}>Habis</Badge>
-                        ) : (
-                          (product.stock ?? "—")
-                        )}
-                      </td>
-                      <td className="text-right font-semibold tabular-nums text-ink-950">{formatRupiah(product.profit_complete)}</td>
-                    </tr>
+                    <div key={channel.marketplace} className="space-y-2 px-5 py-4 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <MarketplaceBadge marketplace={channel.marketplace} className="text-[13px] text-ink-900" />
+                        <span className={cn("font-semibold tabular-nums", profit !== null && profit < 0 ? "text-danger-700" : "text-ink-950")}>
+                          {formatRupiah(channel.lk1)} <span className="font-normal text-ink-500">({formatPercent(channel.lk1_margin_pct)})</span>
+                        </span>
+                      </div>
+                      <Progress value={(Math.abs(profit ?? 0) / maxProfit) * 100} tone={profit !== null && profit < 0 ? "danger" : "brand"} />
+                    </div>
                   )
                 })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+              </div>
+            </div>
+
+            <div className="card overflow-hidden">
+              <div className="flex items-end justify-between border-b border-line-soft px-5 py-4">
+                <div>
+                  <p className="eyebrow">Produk</p>
+                  <h2 className="mt-1 text-lg">Penyumbang laba terbesar</h2>
+                </div>
+                <Link href="/laba" className="link-quiet">Semua SKU</Link>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Produk</th>
+                      <th className="text-right">Terjual</th>
+                      <th className="text-right">LK I</th>
+                      <th className="text-right">Harga impas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.top_sku_lk1 || []).map((product) => (
+                      <tr key={product.sku}>
+                        <td>
+                          <div className="font-semibold text-ink-950">{product.product_name || product.sku}</div>
+                          <div className="font-mono text-[11px] text-ink-500">{product.sku}</div>
+                        </td>
+                        <td className="text-right tabular-nums">{product.qty}</td>
+                        <td className="text-right font-semibold tabular-nums text-ink-950">
+                          {formatRupiah(product.lk1)} <span className="block text-[11px] font-normal text-ink-500">{formatPercent(product.lk1_margin_pct)}</span>
+                        </td>
+                        <td className="text-right tabular-nums">{formatRupiah(product.break_even_price)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
       <Alert variant="info" hideIcon={false} className="text-xs">
-        Angka berasal dari transaksi demo Toko Husin. Status kelengkapan dihitung dari transaksi yang sama dengan daftar tindakan di atas.
+        Data simulasi Toko Husin. Laba yang ditampilkan adalah Laba Kontribusi (bukan laba bersih); biaya tetap seperti gaji dan sewa tidak dihitung.
       </Alert>
     </div>
   )

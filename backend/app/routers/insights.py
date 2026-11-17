@@ -8,14 +8,16 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..db import get_db
+from ..db import get_db, now_wib
 from ..models import (
+    User,
     Complaint,
     Product,
     StockSnapshot,
     Transaction,
     TransactionCalculation,
 )
+from ..security import can_see_cost, get_current_user_optional, require_finance
 from ..services import complaint_service, product_brain, profit_engine
 
 router = APIRouter(prefix="/api/insights", tags=["insights"])
@@ -31,7 +33,10 @@ class WhatIfRequest(BaseModel):
 
 
 @router.get("/overview")
-def get_dashboard_overview(db: Session = Depends(get_db)):
+def get_dashboard_overview(
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     summary = profit_engine.build_summary(db)
     cmp_stats = complaint_service.stats(db)
 
@@ -45,7 +50,7 @@ def get_dashboard_overview(db: Session = Depends(get_db)):
             "level": "warning",
             "title": f"{recon_count} Transaksi Perlu Rekonsiliasi",
             "description": "Biaya komisi atau admin marketplace belum lengkap/sesuai aturan fee.",
-            "link": "/profit",
+            "link": "/laba",
         })
 
     # 2. Urgent complaints
@@ -61,11 +66,11 @@ def get_dashboard_overview(db: Session = Depends(get_db)):
             "level": "danger",
             "title": f"{urgent_complaints} Tiket Keluhan Prioritas Tinggi",
             "description": "Keluhan pelanggan memerlukan verifikasi biaya dan eskalasi CS.",
-            "link": "/complaints",
+            "link": "/keluhan",
         })
 
     # 3. Stock freshness & out-of-stock
-    now = datetime.now()
+    now = now_wib()
     products = db.scalars(select(Product)).all()
     out_of_stock = 0
     stale_stock = 0
@@ -73,7 +78,7 @@ def get_dashboard_overview(db: Session = Depends(get_db)):
         snap = product_brain.latest_stock(db, p.id)
         if not snap or snap.stock <= 0:
             out_of_stock += 1
-        elif product_brain.stock_state(snap, now) == "KEDALUWARSA":
+        elif product_brain.stock_state(snap, now) == "STALE":
             stale_stock += 1
 
     if out_of_stock > 0:
@@ -81,22 +86,28 @@ def get_dashboard_overview(db: Session = Depends(get_db)):
             "type": "STOCK",
             "level": "warning",
             "title": f"{out_of_stock} Produk Stok Habis / Kritis",
-            "description": "Periksa gudang sebelum menerima pesanan di Chat Copilot.",
-            "link": "/products",
+            "description": "Perbarui stok di Produk & Stok agar draf Workspace CS memakai angka terbaru.",
+            "link": "/produk",
         })
 
     shipping_rule = product_brain.get_shipping_rule(db)
     today_capacity = product_brain.get_capacity_day(db, now.date())
     capacity_context = product_brain.shipping_context(db, now)
 
+    finance = can_see_cost(current_user)
+    if not finance:
+        attention = [item for item in attention if item["type"] != "RECONCILIATION"]
     return {
-        "kpi": summary["kpi"],
+        "finance_visible": finance,
+        "kpi": summary["kpi"] if finance else {"transaction_count": summary["kpi"].get("transaction_count", 0)},
         "period": summary["period"],
-        "status_counts": summary["status_counts"],
-        "by_marketplace": summary["by_marketplace"],
-        "by_day": summary["by_day"],
-        "top_products": summary["top_products"],
-        "cost_breakdown": summary["cost_breakdown"],
+        "status_counts": summary["status_counts"] if finance else {},
+        "by_marketplace": summary["by_marketplace"] if finance else [],
+        "by_day": summary["by_day"] if finance else [],
+        "top_products": summary["top_products"] if finance else [],
+        "contribution": summary.get("contribution") if finance else None,
+        "top_sku_lk1": summary.get("by_sku", [])[:5] if finance else [],
+        "cost_breakdown": summary["cost_breakdown"] if finance else [],
         "attention": attention,
         "complaints_summary": cmp_stats,
         "operations": {
@@ -120,7 +131,7 @@ def get_dashboard_overview(db: Session = Depends(get_db)):
 
 
 @router.get("/detective")
-def get_profit_detective(db: Session = Depends(get_db)):
+def get_profit_detective(db: Session = Depends(get_db), _user: User = Depends(require_finance)):
     run = profit_engine.latest_run(db)
     if not run:
         return {"detective_items": [], "summary": {}}
@@ -203,7 +214,7 @@ def get_profit_detective(db: Session = Depends(get_db)):
 
 
 @router.post("/what-if")
-def simulate_what_if(payload: WhatIfRequest, db: Session = Depends(get_db)):
+def simulate_what_if(payload: WhatIfRequest, db: Session = Depends(get_db), _user: User = Depends(require_finance)):
     run = profit_engine.latest_run(db)
     if not run:
         return {"error": "Belum ada run kalkulasi."}

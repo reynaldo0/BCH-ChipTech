@@ -1,6 +1,10 @@
 import { AppShell } from "@/components/AppShell"
-import { ChatCopilotView } from "@/components/views/ChatCopilotView"
+import { WorkspaceCS } from "@/components/views/WorkspaceCS"
 
 export default function AsistenPage() {
-  return <AppShell title="Asisten" description="Buat draft jawaban pelanggan dari data produk dan aturan toko."><ChatCopilotView /></AppShell>
+  return (
+    <AppShell title="Workspace CS" description="Tempel pesan pembeli, dapatkan draf bersumber, dan kerjakan antrean dengan keyboard.">
+      <WorkspaceCS />
+    </AppShell>
+  )
 }

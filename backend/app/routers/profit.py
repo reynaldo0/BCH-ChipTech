@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import CalculationRun, Product, Transaction, TransactionCalculation, User
-from ..security import get_current_user_optional
+from ..security import get_current_user_optional, require_finance
 from ..services import profit_engine
 
-router = APIRouter(prefix="/api/profit", tags=["profit"])
+router = APIRouter(prefix="/api/profit", tags=["profit"], dependencies=[Depends(require_finance)])
 
 
 class CalculateRequest(BaseModel):
@@ -49,6 +49,8 @@ def list_transactions(
     calc_status: str | None = None,
     sku: str | None = None,
     search: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     page: int = 1,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -70,6 +72,10 @@ def list_transactions(
         query = query.where(TransactionCalculation.status == calc_status)
     if sku:
         query = query.where(Transaction.sku == sku)
+    if start_date:
+        query = query.where(Transaction.transaction_date >= start_date)
+    if end_date:
+        query = query.where(Transaction.transaction_date <= end_date)
     if search:
         s = f"%{search}%"
         query = query.where(
@@ -119,6 +125,17 @@ def list_transactions(
         "limit": limit,
         "total": len(items),
         "run_id": run_id,
+    }
+
+
+def _levels(trace: dict, gross) -> dict:
+    levels = profit_engine.contribution_levels(trace, gross)
+    return {
+        "dana_dilepas": str(profit_engine.q2(levels["dana"])) if levels["dana"] is not None else None,
+        "cogs": str(profit_engine.q2(levels["cogs"])) if levels["cogs"] is not None else None,
+        "lk1": str(profit_engine.q2(levels["lk1"])) if levels["lk1"] is not None else None,
+        "lk2": str(profit_engine.q2(levels["lk2"])) if levels["lk2"] is not None else None,
+        "missing_lk2": levels["missing_lk2"],
     }
 
 
@@ -172,6 +189,7 @@ def get_transaction_detail(id: int, db: Session = Depends(get_db)):
             "margin_pct": str(calc.margin_pct) if calc and calc.margin_pct is not None else None,
             "warnings": calc.warnings_json if calc and calc.warnings_json else [],
             "trace": calc.trace_json if calc else {},
+            "contribution": _levels(calc.trace_json or {}, tx.gross_sales) if calc and calc.status != "NOT_CALCULABLE" else None,
         } if calc else None,
     }
 

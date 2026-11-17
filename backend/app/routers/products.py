@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..db import get_db, utcnow
+from ..db import get_db, now_wib, utcnow
 from ..models import (
     AuditLog,
     CapacityDay,
@@ -20,7 +20,7 @@ from ..models import (
     User,
 )
 from ..schemas import StockSnapshotIn
-from ..security import get_current_user, require_role
+from ..security import can_see_cost, get_current_user, get_current_user_optional, require_role
 from ..services import product_brain
 
 router = APIRouter(prefix="/api/products", tags=["products"])
@@ -31,14 +31,16 @@ def list_all_products(
     category: str | None = None,
     q: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
+    show_cost = can_see_cost(current_user)
     query = select(Product).order_by(Product.name)
     if category:
         query = query.where(Product.category == category)
     products = db.scalars(query).all()
 
     results = []
-    now = datetime.now()
+    now = now_wib()
     for p in products:
         if q:
             term = q.lower()
@@ -66,9 +68,10 @@ def list_all_products(
             "category": p.category,
             "variant": p.variant,
             "unit": p.unit,
-            "modal": str(p.modal) if p.modal is not None else None,
+            "modal": (str(p.modal) if p.modal is not None else None) if show_cost else None,
             "price": str(p.price) if p.price is not None else None,
-            "margin_ref_pct": margin_ref,
+            "margin_ref_pct": margin_ref if show_cost else None,
+            "cost_hidden": not show_cost,
             "is_active": p.is_active,
             "stock": current_stock,
             "stock_state": state,
@@ -103,7 +106,7 @@ def list_operational_rules(db: Session = Depends(get_db)):
 @router.get("/rules/shipping")
 def get_shipping_info(db: Session = Depends(get_db)):
     rule = product_brain.get_shipping_rule(db)
-    now = datetime.now()
+    now = now_wib()
     ctx = product_brain.shipping_context(db, now)
     return {
         "rule": {
@@ -159,13 +162,74 @@ def list_faqs(db: Session = Depends(get_db)):
     }
 
 
+# Jalur A (proposal §3.1): fixed-answer intents become quick-reply templates that
+# staff paste once into the marketplace "Template Pesan / Balasan Cepat" feature.
+TEMPLATE_CATEGORIES = {"Pengiriman", "Jadwal", "Lokasi", "Pembayaran", "Promo", "Pesanan", "Layanan", "Keluhan", "Penjualan"}
+
+
+def _template_key(code: str, category: str) -> str:
+    return f"/{category.lower()[:6]}{code.split('-')[-1]}"
+
+
+@router.get("/template-pack")
+def template_pack(db: Session = Depends(get_db)):
+    now = now_wib()
+    faqs = db.scalars(select(Faq).order_by(Faq.code)).all()
+    items = []
+    for faq in faqs:
+        if faq.category not in TEMPLATE_CATEGORIES:
+            continue
+        items.append({
+            "key": _template_key(faq.code, faq.category),
+            "title": faq.question,
+            "category": faq.category,
+            "text": faq.answer,
+            "sources": [faq.code] + [r.strip() for r in (faq.ops_refs or "").split(",") if r.strip()],
+        })
+    # Dynamic template: SKUs that are out of stock on the latest snapshot.
+    empty, newest = [], None
+    for product in db.scalars(select(Product).where(Product.is_active.is_(True)).order_by(Product.name)):
+        snap = product_brain.latest_stock(db, product.id)
+        if snap and snap.stock == 0:
+            empty.append(product.name)
+            newest = max(newest, snap.captured_at) if newest else snap.captured_at
+    if empty:
+        stamp = newest.strftime("%d/%m/%Y %H:%M") if newest else now.strftime("%d/%m/%Y %H:%M")
+        items.insert(0, {
+            "key": "/stokhabis",
+            "title": "Produk yang sedang kosong",
+            "category": "Stok",
+            "text": (
+                f"Mohon maaf Kak, per {stamp} WIB produk berikut belum tersedia: "
+                + ", ".join(empty)
+                + ". Tanggal restock belum ditetapkan dan kami belum menerima pre-order."
+            ),
+            "sources": ["Stok snapshot", "OPS-022"],
+        })
+    lines = [f"PAKET TEMPLATE KOMPAS - dibuat {now.strftime('%d/%m/%Y %H:%M')} WIB", ""]
+    for item in items:
+        lines += [f"[{item['key']}] {item['title']}", item["text"], f"Sumber: {', '.join(item['sources'])}", ""]
+    return {
+        "generated_at": now.isoformat(),
+        "count": len(items),
+        "items": items,
+        "text": "\n".join(lines),
+        "note": "Tempel sekali ke fitur Template Pesan / Balasan Cepat di Seller Center. Perbarui setiap stok atau aturan berubah.",
+    }
+
+
 @router.get("/{id}")
-def get_product_detail(id: int, db: Session = Depends(get_db)):
+def get_product_detail(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    show_cost = can_see_cost(current_user)
     product = db.get(Product, id)
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan.")
 
-    now = datetime.now()
+    now = now_wib()
     snap = product_brain.latest_stock(db, product.id)
     state = product_brain.stock_state(snap, now)
     snapshots = db.scalars(
@@ -187,7 +251,7 @@ def get_product_detail(id: int, db: Session = Depends(get_db)):
             "category": product.category,
             "variant": product.variant,
             "unit": product.unit,
-            "modal": str(product.modal) if product.modal is not None else None,
+            "modal": (str(product.modal) if product.modal is not None else None) if show_cost else None,
             "price": str(product.price) if product.price is not None else None,
             "is_active": product.is_active,
             "stock": snap.stock if snap else 0,
@@ -228,6 +292,9 @@ def update_product_stock(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Lampiran 6: CS and judges only read stock; store managers and packing update it.
+    if current_user.role not in ("owner", "manager", "packing"):
+        raise HTTPException(status_code=403, detail="Peran ini hanya dapat membaca stok.")
     product = db.get(Product, id)
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan.")
@@ -235,7 +302,7 @@ def update_product_stock(
     snapshot = StockSnapshot(
         product_id=product.id,
         stock=payload.stock,
-        captured_at=payload.captured_at or utcnow(),
+        captured_at=payload.captured_at or now_wib(),
         source=f"manual_{current_user.username}",
         is_demo=True,
     )
