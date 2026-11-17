@@ -29,7 +29,7 @@ const steps = [
   },
   {
     title: "Hak akses",
-    href: "/",
+    href: "/dashboard",
     body: "Ganti Mode kerja ke CS: menu Laba Kontribusi dan kolom modal hilang, dan server menolak akses (HTTP 403, tercatat di audit).",
   },
 ]

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ClipboardPaste, Copy, Flag, Forward, Loader2, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
 import { api } from "@/lib/api"
 import {
   CLASS_META,
@@ -42,6 +43,7 @@ export function ChatCopilotView({ compact = false }: { compact?: boolean } = {})
   const [routeReported, setRouteReported] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const primaryRef = useRef<HTMLButtonElement>(null)
+  const { toast } = useToast()
 
   const analyze = useCallback(
     async (text: string, sku?: string) => {
@@ -64,9 +66,12 @@ export function ChatCopilotView({ compact = false }: { compact?: boolean } = {})
         setResult(res)
         setDraft(res.copy_allowed ? res.draft : HOLDING_REPLY)
         setAnnounce(`${CLASS_META[res.message_class].label}. ${res.copy_allowed ? "Tekan Enter untuk menyalin draf." : "Perlu cek staf."}`)
+        toast({ title: "Analisis selesai", description: `${CLASS_META[res.message_class].label} berhasil ditentukan.`, variant: "success" })
         setTimeout(() => primaryRef.current?.focus(), 0)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Analisis gagal. Pastikan server KOMPAS berjalan.")
+        const message = err instanceof Error ? err.message : "Analisis gagal. Pastikan server KOMPAS berjalan."
+        setError(message)
+        toast({ title: "Analisis gagal", description: message, variant: "destructive" })
       } finally {
         setAnalyzing(false)
       }

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { Copy, Forward, Keyboard, ListOrdered, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { CLASS_META, ChatResult, ClassBadge, EvidenceList, HOLDING_REPLY, JevPanel, Warnings, copyText } from "./cs-shared"
@@ -45,6 +46,7 @@ export function QueueView() {
   const [error, setError] = useState("")
   const [announce, setAnnounce] = useState("")
   const listRef = useRef<HTMLDivElement>(null)
+  const { toast } = useToast()
 
   const runQueue = useCallback(
     async (text: string) => {
@@ -61,9 +63,12 @@ export function QueueView() {
         setActive(0)
         const complaints = res.counts.COMPLAINT ?? 0
         setAnnounce(`${res.items.length} pesan dipisah. ${complaints} keluhan di urutan teratas.`)
+        toast({ title: "Antrean siap diproses", description: `${res.items.length} pesan berhasil dipisah.`, variant: "success" })
         setTimeout(() => listRef.current?.focus(), 0)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Antrean gagal diproses.")
+        const message = err instanceof Error ? err.message : "Antrean gagal diproses."
+        setError(message)
+        toast({ title: "Antrean gagal diproses", description: message, variant: "destructive" })
       } finally {
         setLoading(false)
       }

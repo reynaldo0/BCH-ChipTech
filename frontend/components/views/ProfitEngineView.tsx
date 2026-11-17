@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Loader2, Search, Upload, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
 
 import { API_BASE, api } from "@/lib/api"
 import { cn, formatIDR } from "@/lib/utils"
@@ -98,6 +99,7 @@ function ImportWizard({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [result, setResult] = useState<Record<string, any> | null>(null)
+  const { toast } = useToast()
 
   async function upload(selected: File) {
     setError("")
@@ -105,11 +107,15 @@ function ImportWizard({ onClose, onDone }: { onClose: () => void; onDone: () => 
     setPreview(null)
     const ext = selected.name.split(".").pop()?.toLowerCase()
     if (!ext || !["csv", "xlsx"].includes(ext)) {
-      setError("Format file harus .csv atau .xlsx (file .xlsm, .pdf, dan lainnya ditolak).")
+      const message = "Format file harus .csv atau .xlsx (file .xlsm, .pdf, dan lainnya ditolak)."
+      setError(message)
+      toast({ title: "Format file tidak didukung", description: message, variant: "destructive" })
       return
     }
     if (selected.size > 10 * 1024 * 1024) {
-      setError("Ukuran file melebihi 10 MB.")
+      const message = "Ukuran file melebihi 10 MB."
+      setError(message)
+      toast({ title: "File terlalu besar", description: message, variant: "destructive" })
       return
     }
     setFile(selected)
@@ -121,8 +127,11 @@ function ImportWizard({ onClose, onDone }: { onClose: () => void; onDone: () => 
       const data = await api.upload<Preview>(`/api/imports/preview${query}`, form)
       setPreview(data)
       setMapping(data.suggested_mapping)
+      toast({ title: "Pratinjau siap", description: "Periksa pemetaan kolom sebelum mengonfirmasi impor.", variant: "success" })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Pratinjau gagal.")
+      const message = err instanceof Error ? err.message : "Pratinjau gagal."
+      setError(message)
+      toast({ title: "Pratinjau gagal", description: message, variant: "destructive" })
     } finally {
       setLoading(false)
     }
@@ -135,9 +144,12 @@ function ImportWizard({ onClose, onDone }: { onClose: () => void; onDone: () => 
     try {
       const clean = Object.fromEntries(Object.entries(mapping).filter(([, target]) => target))
       setResult(await api.post(`/api/imports/${preview.batch_id}/confirm`, { mapping: clean }))
+      toast({ title: "Impor berhasil", description: "Data transaksi sudah masuk ke Profit Engine.", variant: "success" })
       onDone()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impor gagal.")
+      const message = err instanceof Error ? err.message : "Impor gagal."
+      setError(message)
+      toast({ title: "Impor gagal", description: message, variant: "destructive" })
     } finally {
       setLoading(false)
     }

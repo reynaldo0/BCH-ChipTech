@@ -21,17 +21,21 @@ import {
   Check,
   X,
   Search,
+  UserRoundCog,
 } from "lucide-react"
 import { api } from "@/lib/api"
 import { formatIDR } from "@/lib/utils"
 
 export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () => void; isResetting?: boolean }) {
-  const [activeTab, setActiveTab] = useState<"fee_rules" | "audit_logs" | "demo">("fee_rules")
+  const [activeTab, setActiveTab] = useState<"fee_rules" | "audit_logs" | "demo" | "accounts">("fee_rules")
   const [feeRules, setFeeRules] = useState<any[]>([])
   const [auditLogs, setAuditLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchLog, setSearchLog] = useState("")
   const [selectedDetail, setSelectedDetail] = useState<any | null>(null)
+  const [currentRole, setCurrentRole] = useState("")
+  const [accountRequests, setAccountRequests] = useState<any[]>([])
+  const [users, setUsers] = useState<any[]>([])
 
   // New Fee Rule Modal
   const [showAddModal, setShowAddModal] = useState(false)
@@ -62,10 +66,38 @@ export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () =>
       ])
       setFeeRules(feeRes.fee_rules || [])
       setAuditLogs(auditRes.logs || [])
+      const me = await api.get<{ role: string }>("/api/auth/me")
+      setCurrentRole(me.role)
+      if (me.role === "owner") {
+        const [requestRes, userRes] = await Promise.all([api.get("/api/auth/account-requests"), api.get("/api/auth/users")])
+        setAccountRequests(requestRes.requests || [])
+        setUsers(userRes.users || [])
+      }
     } catch (err) {
       console.error("Gagal memuat pengaturan:", err)
     } finally {
       setLoading(false)
+    }
+
+  }
+
+  async function decideRequest(id: number, action: "approve" | "reject", role?: string) {
+    try {
+      await api.post(`/api/auth/account-requests/${id}/decision`, { action, role })
+      await loadSettings()
+      setAlertMsg({ type: "success", text: `Pengajuan berhasil ${action === "approve" ? "disetujui" : "ditolak"}.` })
+    } catch (err: any) {
+      setAlertMsg({ type: "error", text: err.message || "Pengajuan gagal diproses." })
+    }
+  }
+
+  async function changeRole(id: number, role: string) {
+    try {
+      await api.patch(`/api/auth/users/${id}/role`, { role })
+      await loadSettings()
+      setAlertMsg({ type: "success", text: "Role pengguna berhasil diperbarui." })
+    } catch (err: any) {
+      setAlertMsg({ type: "error", text: err.message || "Role pengguna gagal diperbarui." })
     }
   }
 
@@ -132,7 +164,46 @@ export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () =>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             <span>Segarkan</span>
           </button>
+          {currentRole === "owner" ? (
+            <button
+              onClick={() => setActiveTab("accounts")}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+                activeTab === "accounts" ? "bg-deep-teal text-white shadow-sm" : "bg-white text-gray-600 border border-kompas-border hover:bg-gray-50"
+              }`}
+            >
+              <UserRoundCog className="h-3.5 w-3.5" />
+              <span>Akun & Pengajuan ({accountRequests.filter((item) => item.status === "PENDING").length})</span>
+            </button>
+          ) : null}
         </div>
+
+        {activeTab === "accounts" && currentRole === "owner" ? (
+          <div className="space-y-6">
+            <section className="rounded-2xl border border-kompas-border bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-bold text-deep-teal">Pengajuan akses akun</h2>
+              <p className="mt-1 text-xs text-gray-500">Owner menyetujui akses sebelum akun dapat digunakan.</p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead><tr className="border-b border-kompas-border text-gray-500"><th className="px-3 py-2">Pemohon</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Role diminta</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Aksi</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {accountRequests.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-3 font-semibold">{item.display_name}</td><td className="px-3 py-3">{item.email}</td><td className="px-3 py-3">{item.requested_role}</td><td className="px-3 py-3">{item.status}</td>
+                        <td className="px-3 py-3">
+                          {item.status === "PENDING" ? <div className="flex gap-2"><button onClick={() => void decideRequest(item.id, "approve", "cs")} className="rounded-lg bg-emerald-600 px-2.5 py-1.5 font-semibold text-white">Setujui</button><button onClick={() => void decideRequest(item.id, "reject")} className="rounded-lg border border-red-200 px-2.5 py-1.5 font-semibold text-red-700">Tolak</button></div> : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            <section className="rounded-2xl border border-kompas-border bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-bold text-deep-teal">Kelola role pengguna</h2>
+              <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-kompas-border text-gray-500"><th className="px-3 py-2">Nama</th><th className="px-3 py-2">Username</th><th className="px-3 py-2">Role</th></tr></thead><tbody className="divide-y divide-gray-100">{users.map((user) => <tr key={user.id}><td className="px-3 py-3 font-semibold">{user.display_name}</td><td className="px-3 py-3">{user.username}</td><td className="px-3 py-3"><select value={user.role} onChange={(event) => void changeRole(user.id, event.target.value)} className="rounded-lg border border-kompas-border px-2 py-1"><option value="owner">Owner</option><option value="manager">Manager</option><option value="cs">CS</option><option value="packing">Packing</option><option value="judge">Judge</option></select></td></tr>)}</tbody></table></div>
+            </section>
+          </div>
+        ) : null}
       </div>
 
       <JevStatusCard />

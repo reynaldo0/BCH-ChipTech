@@ -10,6 +10,7 @@ import { Badge, MarketplaceBadge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { StatCard } from "@/components/ui/stat-card"
+import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
 
 const levelStyle = {
@@ -22,12 +23,17 @@ export function HomeDashboard() {
   const [data, setData] = useState<OverviewResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     api
       .get<OverviewResponse>("/api/insights/overview")
       .then(setData)
-      .catch(() => setError("Ringkasan belum bisa dimuat. Periksa koneksi lalu coba lagi."))
+      .catch(() => {
+        const message = "Ringkasan belum bisa dimuat. Periksa koneksi lalu coba lagi."
+        setError(message)
+        toast({ title: "Ringkasan gagal dimuat", description: message, variant: "destructive" })
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -221,19 +227,60 @@ export function HomeDashboard() {
 }
 
 function HomeSkeleton() {
-  const bone = "animate-pulse rounded-lg bg-ink-100"
+  const bone = "animate-pulse rounded-md bg-ink-100"
   return (
-    <div className="space-y-8" aria-busy="true">
-      <div className={cn(bone, "h-7 w-56")} />
-      <div className={cn(bone, "h-48")} />
+    <div className="space-y-8" aria-busy="true" aria-label="Memuat ringkasan toko">
+      <div className="flex items-end justify-between gap-4">
+        <div className="space-y-2">
+          <div className={cn(bone, "h-3 w-28")} />
+          <div className={cn(bone, "h-7 w-56")} />
+        </div>
+        <div className={cn(bone, "h-6 w-24 rounded-full")} />
+      </div>
+      <div className="overflow-hidden rounded-lg border border-line bg-card">
+        <div className="space-y-3 p-5">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3 border-b border-line-soft pb-3 last:border-0 last:pb-0">
+              <div className={cn(bone, "h-9 w-9 shrink-0 rounded-md")} />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className={cn(bone, "h-3 w-2/5")} />
+                <div className={cn(bone, "h-3 w-4/5")} />
+              </div>
+              <div className={cn(bone, "hidden h-8 w-16 sm:block")} />
+            </div>
+          ))}
+        </div>
+      </div>
       <div className="grid gap-4 md:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className={cn(bone, "h-36")} />
+          <div key={i} className="rounded-lg border border-line bg-card p-5">
+            <div className="flex items-center justify-between">
+              <div className={cn(bone, "h-3 w-20")} />
+              <div className={cn(bone, "h-8 w-8 rounded-md")} />
+            </div>
+            <div className={cn(bone, "mt-5 h-8 w-32")} />
+            <div className={cn(bone, "mt-4 h-3 w-4/5")} />
+          </div>
         ))}
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className={cn(bone, "h-56")} />
-        <div className={cn(bone, "h-56")} />
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-lg border border-line bg-card p-5">
+            <div className={cn(bone, "h-3 w-24")} />
+            <div className={cn(bone, "mt-3 h-6 w-52")} />
+            <div className="mt-6 space-y-4">
+              {[1, 2, 3].map((row) => (
+                <div key={row} className="space-y-2">
+                  <div className="flex justify-between gap-3">
+                    <div className={cn(bone, "h-3 w-24")} />
+                    <div className={cn(bone, "h-3 w-20")} />
+                  </div>
+                  <div className={cn(bone, "h-1.5 w-full rounded-full")} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

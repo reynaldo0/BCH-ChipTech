@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   BarChart3,
@@ -14,15 +15,15 @@ import {
   Settings,
   BookOpen,
   ChevronDown,
+  LogOut,
   X,
   type LucideIcon,
 } from "lucide-react"
 import { BrandMark } from "./BrandMark"
 import { ChatCopilotView } from "./views/ChatCopilotView"
-import { Alert } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { DEMO_MODE, api, setSessionToken, type Role } from "@/lib/api"
+import { ApiError, DEMO_MODE, hasAuthenticatedSession, setSessionToken, verifySession, type Role } from "@/lib/api"
 import { useProviderMode } from "./views/cs-shared"
 import { DEMO_LABEL, ROLE_LABELS } from "@/lib/navigation"
 import { cn } from "@/lib/utils"
@@ -30,7 +31,7 @@ import { cn } from "@/lib/utils"
 type NavItem = { href: string; label: string; icon: LucideIcon; roles?: Role[] }
 const FINANCE: Role[] = ["owner", "manager", "judge"]
 const navigation: { label: string; items: NavItem[] }[] = [
-  { label: "Ringkasan", items: [{ href: "/", label: "Beranda", icon: LayoutDashboard }] },
+  { label: "Ringkasan", items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
   {
     label: "Layanan pelanggan",
     items: [
@@ -59,11 +60,10 @@ export function AppShell({ children, title, description }: { children: React.Rea
   const [openGroups, setOpenGroups] = useState<string[]>(() => navigation.map((group) => group.label))
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [role, setRole] = useState<Role>("owner")
-  const [switchingRole, setSwitchingRole] = useState(false)
-  const [roleError, setRoleError] = useState("")
   const providerMode = useProviderMode()
 
   const [userName, setUserName] = useState("")
+  const [authReady, setAuthReady] = useState(false)
 
   useEffect(() => {
     const activeGroup = navigation.find((group) => group.items.some((item) => isActive(pathname, item.href)))
@@ -73,23 +73,37 @@ export function AppShell({ children, title, description }: { children: React.Rea
   }, [pathname])
 
   useEffect(() => {
-    if (DEMO_MODE) {
-      const savedRole = window.localStorage.getItem("kompas_role") as Role | null
-      if (savedRole && savedRole in ROLE_LABELS) setRole(savedRole)
+    let cancelled = false
+    const redirectToLogin = () => {
+      const next = `${window.location.pathname}${window.location.search}`
+      window.location.assign(`/masuk?next=${encodeURIComponent(next)}`)
+    }
+
+    if (!hasAuthenticatedSession()) {
+      redirectToLogin()
       return
     }
-    // Production: the role comes from the server session, never from the browser.
-    api
-      .get<{ role: Role; display_name: string }>("/api/auth/me")
+    verifySession()
       .then((me) => {
+        if (cancelled) return
         setRole(me.role)
         setUserName(me.display_name)
+        window.localStorage.setItem("kompas_role", me.role)
+        setAuthReady(true)
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        if (cancelled) return
+        if (!(error instanceof ApiError && error.status === 401)) console.error("Sesi pengguna tidak dapat diverifikasi:", error)
+        redirectToLogin()
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   function logout() {
     setSessionToken(null)
+    window.localStorage.removeItem("kompas_role")
     window.location.assign("/masuk")
   }
 
@@ -104,27 +118,16 @@ export function AppShell({ children, title, description }: { children: React.Rea
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-  async function handleRoleChange(nextRole: Role) {
-    const previousRole = role
-    setRoleError("")
-    setRole(nextRole)
-    window.localStorage.setItem("kompas_role", nextRole)
-    setSwitchingRole(true)
-    try {
-      const response = await api.post<{ token: string }>("/api/auth/switch-role", { role: nextRole })
-      setSessionToken(response.token)
-      window.location.reload()
-    } catch (error) {
-      console.error("Gagal mengganti mode pengguna:", error)
-      setRoleError("Mode belum berubah. Pastikan server toko sedang berjalan.")
-      setRole(previousRole)
-      window.localStorage.setItem("kompas_role", previousRole)
-      setSwitchingRole(false)
-    }
-  }
-
   function toggleGroup(label: string) {
     setOpenGroups((groups) => (groups.includes(label) ? groups.filter((group) => group !== label) : [...groups, label]))
+  }
+
+  if (!authReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-sm text-ink-600">
+        Memeriksa sesi pengguna...
+      </div>
+    )
   }
 
   return (
@@ -139,12 +142,22 @@ export function AppShell({ children, title, description }: { children: React.Rea
       >
         <div className={cn("flex h-16 items-center border-b border-sidebar-border", sidebarCollapsed ? "justify-center px-3" : "justify-between px-5")}>
           <Link
-            href="/"
+            href="/dashboard"
             onClick={() => setMobileOpen(false)}
             className={cn("rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400", sidebarCollapsed && "hidden")}
           >
             <BrandMark variant="light" />
           </Link>
+          {sidebarCollapsed ? (
+            <Link
+              href="/dashboard"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              aria-label="Buka beranda KOMPAS"
+            >
+              <BrandMark variant="light" compact />
+            </Link>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -154,7 +167,7 @@ export function AppShell({ children, title, description }: { children: React.Rea
             aria-label={sidebarCollapsed ? "Buka sidebar" : "Tutup sidebar"}
             data-tooltip={sidebarCollapsed ? "Buka sidebar" : "Tutup sidebar"}
             className={cn(
-              "tooltip-trigger hidden rounded-lg border border-transparent p-2 text-sidebar-foreground transition-all duration-150 hover:border-brand-700/60 hover:bg-brand-700/20 hover:text-white hover:shadow-[0_2px_5px_rgba(23,101,95,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 active:translate-y-px lg:flex"
+              "tooltip-trigger hidden rounded-lg border border-transparent p-2 text-sidebar-foreground transition-all duration-150 hover:border-brand-700/60 hover:bg-brand-700/20 hover:text-white hover:shadow-[0_2px_5px_rgba(55,84,247,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 active:translate-y-px lg:flex"
             )}
           >
             <Menu className="h-5 w-5" />
@@ -162,7 +175,7 @@ export function AppShell({ children, title, description }: { children: React.Rea
           <button
             type="button"
             data-tooltip="Tutup sidebar"
-            className="tooltip-trigger rounded-lg border border-transparent p-2 text-sidebar-foreground transition-all duration-150 hover:border-brand-700/60 hover:bg-brand-700/20 hover:text-white hover:shadow-[0_2px_5px_rgba(23,101,95,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 active:translate-y-px lg:hidden"
+            className="tooltip-trigger rounded-lg border border-transparent p-2 text-sidebar-foreground transition-all duration-150 hover:border-brand-700/60 hover:bg-brand-700/20 hover:text-white hover:shadow-[0_2px_5px_rgba(55,84,247,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 active:translate-y-px lg:hidden"
             onClick={() => setMobileOpen(false)}
             aria-label="Tutup menu"
           >
@@ -171,45 +184,20 @@ export function AppShell({ children, title, description }: { children: React.Rea
         </div>
 
         <div className={cn("border-b border-sidebar-border px-5 py-4", sidebarCollapsed && "lg:hidden")}>
-          {DEMO_MODE ? (
-            <>
-              <label className="font-sans text-[11px] font-medium text-sidebar-foreground/70" htmlFor="role-switcher">
-                Mode kerja
-              </label>
-              <select
-                id="role-switcher"
-                value={role}
-                disabled={switchingRole}
-                onChange={(event) => void handleRoleChange(event.target.value as Role)}
-                className="mt-1.5 h-9 w-full cursor-pointer rounded-md border border-sidebar-border bg-sidebar-accent px-3 text-xs font-medium text-white transition-colors hover:border-brand-600 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 disabled:opacity-60"
-              >
-                {(Object.keys(ROLE_LABELS) as Role[]).map((item) => (
-                  <option key={item} value={item} className="text-ink-950">
-                    {ROLE_LABELS[item].short}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-2 text-[11px] leading-4 text-sidebar-foreground/70">{ROLE_LABELS[role].description}</p>
-            </>
-          ) : (
-            <div>
-              <p className="font-sans text-[11px] font-medium text-sidebar-foreground/70">Masuk sebagai</p>
+          <div>
+              <p className="font-sans text-[11px] font-medium text-sidebar-foreground/70">Akun aktif</p>
               <p className="mt-1.5 text-sm font-medium text-white">{userName || ROLE_LABELS[role].name}</p>
-              <p className="mt-1 text-[11px] leading-4 text-sidebar-foreground/70">{ROLE_LABELS[role].description}</p>
+              <p className="mt-1 text-[11px] leading-4 text-sidebar-foreground/70">
+                {ROLE_LABELS[role].short} · {ROLE_LABELS[role].description}
+              </p>
               <button
                 type="button"
                 onClick={logout}
-                className="mt-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1 text-xs font-semibold text-sidebar-foreground shadow-[0_2px_5px_rgba(0,0,0,0.16)] transition-all duration-150 hover:border-brand-700/60 hover:bg-brand-700/25 hover:text-white hover:shadow-[0_3px_8px_rgba(23,101,95,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 active:translate-y-px"
+                className="mt-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1 text-xs font-semibold text-sidebar-foreground shadow-[0_2px_5px_rgba(0,0,0,0.16)] transition-all duration-150 hover:border-brand-700/60 hover:bg-brand-700/25 hover:text-white hover:shadow-[0_3px_8px_rgba(55,84,247,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 active:translate-y-px"
               >
                 Keluar
               </button>
             </div>
-          )}
-          {roleError ? (
-            <Alert variant="destructive" className="mt-3 p-2.5 text-[11px]" hideIcon>
-              {roleError}
-            </Alert>
-          ) : null}
         </div>
 
         <nav className={cn("scrollbar-thin flex-1 space-y-5 overflow-y-auto px-3 py-4", sidebarCollapsed && "lg:px-2")} aria-label="Navigasi utama">
@@ -223,7 +211,7 @@ export function AppShell({ children, title, description }: { children: React.Rea
                 onClick={() => toggleGroup(group.label)}
                 aria-expanded={openGroups.includes(group.label)}
                 className={cn(
-                  "flex w-full items-center rounded-md border border-transparent py-2 text-left font-sans text-[13px] font-semibold text-sidebar-foreground/75 transition-all duration-150 hover:border-brand-700/50 hover:bg-brand-700/15 hover:text-white hover:shadow-[0_2px_5px_rgba(23,101,95,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 active:translate-y-px",
+                  "flex w-full items-center rounded-md border border-transparent py-2 text-left font-sans text-[13px] font-semibold text-sidebar-foreground/75 transition-all duration-150 hover:border-brand-700/50 hover:bg-brand-700/15 hover:text-white hover:shadow-[0_2px_5px_rgba(55,84,247,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 active:translate-y-px",
                   sidebarCollapsed ? "lg:hidden" : "justify-start gap-2 px-3"
                 )}
               >
@@ -264,7 +252,7 @@ export function AppShell({ children, title, description }: { children: React.Rea
                             ) : null}
                             {active ? <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-brand-400" aria-hidden="true" /> : null}
                             <item.icon className={cn("relative h-4 w-4 shrink-0", active ? "text-brand-300" : "text-sidebar-foreground/70")} aria-hidden="true" />
-                            <span className="relative">{item.label}</span>
+                            <span className={cn("relative", sidebarCollapsed && "lg:hidden")}>{item.label}</span>
                           </Link>
                         )
                       })}
@@ -303,6 +291,13 @@ export function AppShell({ children, title, description }: { children: React.Rea
               <Button variant="outline" size="icon" className="tooltip-trigger lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Buka menu" data-tooltip="Buka menu">
                 <Menu />
               </Button>
+              <Image
+                src="/fonts/logosmall.png"
+                alt=""
+                width={48}
+                height={48}
+                className="hidden h-8 w-8 object-contain sm:block"
+              />
               <div className="min-w-0">
                 <h1 className="truncate font-display text-xl font-semibold leading-tight text-ink-950">{title}</h1>
                 <p className="hidden truncate text-[13px] text-ink-600 sm:block">{description}</p>
@@ -324,6 +319,10 @@ export function AppShell({ children, title, description }: { children: React.Rea
                   <span className="hidden md:inline">Analisis pesan</span>
                 </Button>
               ) : null}
+              <Button variant="outline" onClick={logout} aria-label="Keluar dari akun">
+                <LogOut />
+                <span className="hidden sm:inline">Keluar</span>
+              </Button>
             </div>
           </div>
         </header>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { api } from "@/lib/api"
 import { copyText, formatStamp } from "./cs-shared"
+import { useToast } from "@/components/ui/use-toast"
 
 interface TemplateItem {
   key: string
@@ -28,6 +29,7 @@ export function TemplatePackView() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
+  const { toast } = useToast()
 
   async function load() {
     setLoading(true)
@@ -35,7 +37,9 @@ export function TemplatePackView() {
     try {
       setPack(await api.get<TemplatePack>("/api/products/template-pack"))
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Paket template gagal dimuat.")
+      const message = err instanceof Error ? err.message : "Paket template gagal dimuat."
+      setError(message)
+      toast({ title: "Template gagal dimuat", description: message, variant: "destructive" })
     } finally {
       setLoading(false)
     }
@@ -48,6 +52,7 @@ export function TemplatePackView() {
   async function copy(id: string, text: string) {
     if (await copyText(text)) {
       setCopied(id)
+      toast({ title: "Template disalin", description: "Teks siap ditempel ke Seller Center.", variant: "success" })
       setTimeout(() => setCopied(null), 1600)
     }
   }
