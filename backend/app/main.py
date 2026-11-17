@@ -21,9 +21,26 @@ from .seeder import seed_all
 
 def init_db():
     Base.metadata.create_all(engine)
-    from sqlalchemy import select
+    from sqlalchemy import inspect, select, text
     from .db import SessionLocal
-    from .models import Product
+    from .models import Product, User
+    columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    if "email" not in columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(255)"))
+    with SessionLocal() as db:
+        legacy_emails = {
+            "owner": "owner@kompasdev.my.id",
+            "manager": "manager@kompasdev.my.id",
+            "cs": "cs@kompasdev.my.id",
+            "packing": "packing@kompasdev.my.id",
+            "judge": "judge@kompasdev.my.id",
+        }
+        for username, email in legacy_emails.items():
+            user = db.scalar(select(User).where(User.username == username))
+            if user and not user.email:
+                user.email = email
+        db.commit()
     with SessionLocal() as db:
         if not db.scalar(select(Product).limit(1)):
             try:

@@ -17,6 +17,7 @@
 .env.*
 !.env.example
 !**/.env.example
+/deploy/backend.env
 
 # Local secret/key files (but not demo documents in data/)
 *.pem

@@ -35,6 +35,7 @@ class UserRoleChange(BaseModel):
 class UserOut(ORMModel):
     id: int
     username: str
+    email: str
     display_name: str
     role: str
 

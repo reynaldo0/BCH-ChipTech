@@ -1,0 +1,45 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: kompas-backend:latest
+    restart: unless-stopped
+    env_file:
+      - ./deploy/backend.env
+    environment:
+      DATABASE_URL: sqlite:////app/var/kompas.db
+      DATA_DIR: /app/data
+      CSV_DIR: /app/csv
+    ports:
+      - "8005:8005"
+    volumes:
+      - kompas_backend_data:/app/var
+      - kompas_uploads:/app/data/uploads
+    networks:
+      - kompas
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - kompas
+
+volumes:
+  kompas_backend_data:
+  kompas_uploads:
+  caddy_data:
+  caddy_config:
+
+networks:
+  kompas:

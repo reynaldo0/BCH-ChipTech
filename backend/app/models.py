@@ -29,6 +29,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(128))
     role: Mapped[str] = mapped_column(String(32), index=True)
     password_hash: Mapped[str] = mapped_column(String(255))

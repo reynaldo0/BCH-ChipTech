@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+**/.env
+backend/kompas.db
+backend/*.db-*
+frontend/node_modules
+frontend/.next
+frontend/.env*
+**/__pycache__
+**/*.pyc
+.pytest_cache
+data/uploads
+data/derived
+*.log

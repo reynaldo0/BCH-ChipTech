@@ -186,7 +186,7 @@ export function AuthPanel({ mode }: { mode: AuthMode }) {
                 ) : (
                   <>
                     <div>
-                      <label className="field-label" htmlFor="login-user">Username</label>
+                      <label className="field-label" htmlFor="login-user">Username atau email</label>
                       <input id="login-user" className="field-control h-11" autoComplete="username" autoFocus required value={username} onChange={(event) => setUsername(event.target.value)} />
                     </div>
                   </>
