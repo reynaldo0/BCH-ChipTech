@@ -3,8 +3,10 @@ export const API_BASE =
 
 /** Demo mode lets anyone pick a role; production (NEXT_PUBLIC_DEMO_MODE=false) requires login. */
 export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== "false"
+const AUTHENTICATED_MARKER = "kompas_authenticated"
 
 export type Role = "owner" | "manager" | "cs" | "packing" | "judge"
+export type SessionUser = { id: number; username: string; display_name: string; role: Role }
 
 export class ApiError extends Error {
   status: number
@@ -21,34 +23,28 @@ function authToken(): string | null {
   return window.localStorage.getItem("kompas_token")
 }
 
+export function getSessionToken(): string | null {
+  return authToken()
+}
+
 export function currentRole(): Role {
   if (typeof window === "undefined") return "owner"
   return (window.localStorage.getItem("kompas_role") as Role | null) ?? "owner"
 }
 
-let bootstrap: Promise<string | null> | null = null
+export function hasAuthenticatedSession(): boolean {
+  if (typeof window === "undefined") return false
+  return Boolean(authToken() && window.localStorage.getItem(AUTHENTICATED_MARKER) === "1")
+}
 
-/** Demo login: obtain a session token for the selected role once, so the API can enforce RBAC. */
+export function markAuthenticated() {
+  if (typeof window !== "undefined") window.localStorage.setItem(AUTHENTICATED_MARKER, "1")
+}
+
+/** API calls never create a session implicitly; a user must log in first. */
 async function ensureToken(): Promise<string | null> {
   const existing = authToken()
-  if (existing || typeof window === "undefined" || !DEMO_MODE) return existing
-  if (!bootstrap) {
-    bootstrap = fetch(`${API_BASE}/api/auth/switch-role`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: currentRole() }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body) => {
-        if (body?.token) window.localStorage.setItem("kompas_token", body.token)
-        return body?.token ?? null
-      })
-      .catch(() => null)
-      .finally(() => {
-        bootstrap = null
-      })
-  }
-  return bootstrap
+  return existing
 }
 
 async function parseError(res: Response): Promise<string> {
@@ -63,6 +59,20 @@ async function parseError(res: Response): Promise<string> {
     // Response was not JSON; fall through to a safe generic message.
   }
   return "Permintaan tidak dapat diproses. Periksa koneksi ke server KOMPAS."
+}
+
+export async function verifySession(): Promise<SessionUser> {
+  const token = authToken()
+  if (!token) throw new ApiError("Sesi tidak ditemukan.", 401)
+  const res = await fetch(`${API_BASE}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}`, "X-Requested-With": "XMLHttpRequest" },
+    credentials: "include",
+  })
+  if (!res.ok) {
+    setSessionToken(null)
+    throw new ApiError(await parseError(res), res.status)
+  }
+  return (await res.json()) as SessionUser
 }
 
 export async function fetchApi<T = any>(
@@ -121,5 +131,8 @@ export const api = {
 export function setSessionToken(token: string | null) {
   if (typeof window === "undefined") return
   if (token) window.localStorage.setItem("kompas_token", token)
-  else window.localStorage.removeItem("kompas_token")
+  else {
+    window.localStorage.removeItem("kompas_token")
+    window.localStorage.removeItem(AUTHENTICATED_MARKER)
+  }
 }

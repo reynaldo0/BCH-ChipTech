@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { Bricolage_Grotesque, Inter, JetBrains_Mono } from "next/font/google"
+import { Toaster } from "@/components/ui/toaster"
 import ".//globals.css"
 
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" })
@@ -9,6 +10,11 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", displ
 export const metadata: Metadata = {
   title: "KOMPAS | Toko Husin",
   description: "Ringkasan usaha marketplace Toko Husin.",
+  icons: {
+    icon: "/fonts/logosmall.png",
+    shortcut: "/fonts/logosmall.png",
+    apple: "/fonts/logosmall.png",
+  },
 }
 
 export default function RootLayout({
@@ -20,6 +26,7 @@ export default function RootLayout({
     <html lang="id" className={`${sans.variable} ${display.variable} ${mono.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         {children}
+        <Toaster />
       </body>
     </html>
   )
