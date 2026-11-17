@@ -1,20 +1,40 @@
 services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: kompas
+      MYSQL_USER: kompas
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - kompas_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u kompas -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kompas
+
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     image: kompas-backend:latest
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     env_file:
       - ./deploy/backend.env
     environment:
-      DATABASE_URL: sqlite:////app/var/kompas.db
+      DATABASE_URL: mysql+pymysql://kompas:${MYSQL_PASSWORD}@db:3306/kompas?charset=utf8mb4
       DATA_DIR: /app/data
       CSV_DIR: /app/csv
     ports:
       - "8005:8005"
     volumes:
-      - kompas_backend_data:/app/var
       - kompas_uploads:/app/data/uploads
     networks:
       - kompas
@@ -36,7 +56,7 @@ services:
       - kompas
 
 volumes:
-  kompas_backend_data:
+  kompas_mysql_data:
   kompas_uploads:
   caddy_data:
   caddy_config:

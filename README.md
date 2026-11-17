@@ -130,5 +130,5 @@ Set `DEMO_MODE=false` di `backend/.env` dan `NEXT_PUBLIC_DEMO_MODE=false` di `fr
 - Pemilih peran tanpa kata sandi dan reset data dinonaktifkan (HTTP 403); login memakai
   `/masuk` dengan username `owner`, `manager`, `cs`, `packing`, `judge` dan `SEED_USER_PASSWORD`
   sebagai kata sandi awal. Login dibatasi 5 kegagalan per 5 menit.
-- Atur `ALLOWED_ORIGINS` ke origin frontend sebenarnya, dan pakai PostgreSQL lewat `DATABASE_URL`.
+- Atur `ALLOWED_ORIGINS` ke origin frontend sebenarnya, dan pakai MySQL lewat `DATABASE_URL`.
 - Data seed adalah data dummy; kosongkan atau ganti sebelum dipakai untuk toko nyata.

@@ -6,7 +6,7 @@ Deployment layout:
 - API: VPS at `https://api.kompasdev.my.id`
 - FastAPI container: port `8005`
 - Caddy: TLS termination and reverse proxy on ports `80`/`443`
-- Persistent SQLite database: Docker volume `kompas_backend_data`
+- Persistent MySQL database: Docker volume `kompas_mysql_data`
 - Persistent import uploads: Docker volume `kompas_uploads`
 
 ## 1. DNS
@@ -42,15 +42,23 @@ firewall if direct access is not needed.
 From the repository root on the VPS:
 
 ```bash
+cat > .env <<EOF
+MYSQL_PASSWORD=$(openssl rand -hex 32)
+MYSQL_ROOT_PASSWORD=$(openssl rand -hex 32)
+EOF
+chmod 600 .env
 cp deploy/backend.env.example deploy/backend.env
 chmod 600 deploy/backend.env
 ```
 
-Edit `deploy/backend.env` and set at least:
+Edit `.env` and `deploy/backend.env` and set at least:
 
 - a unique `SESSION_SECRET` (64+ random characters);
 - a strong `SEED_USER_PASSWORD`;
-- the production `ALLOWED_ORIGINS`.
+- the production `ALLOWED_ORIGINS`;
+- a strong `MYSQL_PASSWORD` and a different `MYSQL_ROOT_PASSWORD` in `.env`.
+  Compose injects `MYSQL_PASSWORD` into both MySQL and the backend connection
+  string.
 
 Then start the stack:
 
@@ -62,8 +70,9 @@ curl -f http://127.0.0.1:8005/healthz
 curl -f https://api.kompasdev.my.id/healthz
 ```
 
-On first startup the application creates all tables and seeds the catalog, rules,
-FAQ, evaluation data, transactions, and initial users. With `DEMO_MODE=false`,
+On first startup MySQL initializes inside the `db` container. The application
+then creates all tables and seeds the catalog, rules, FAQ, evaluation data,
+transactions, and initial users. With `DEMO_MODE=false`,
 the five initial users use `SEED_USER_PASSWORD` as their password:
 
 ```text
@@ -83,8 +92,8 @@ docker compose up -d caddy
 docker compose down
 ```
 
-Do not run `docker compose down -v` unless the database and uploaded files are
-intentionally being deleted.
+Do not run `docker compose down -v` unless the MySQL database and uploaded
+files are intentionally being deleted.
 
 ## 4. Configure Vercel
 
