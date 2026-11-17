@@ -2,12 +2,16 @@
 
 // ── Skala warna ──────────────────────────────────────────────────────────────
 const brand = {
-  50: "#F0FAF9", 100: "#D5F2EF", 200: "#AEE5DF", 300: "#7DD0C8", 400: "#4DB5AC",
-  500: "#2A9A91", 600: "#1B7F78", 700: "#17655F", 800: "#15514E", 900: "#134340", 950: "#08282A",
+  50: "#F1F4E8", 100: "#E3E9D1", 200: "#CAD6AA", 300: "#AEBF7D", 400: "#8DA05A",
+  500: "#71843F", 600: "#5E7034", 700: "#4E5E2B", 800: "#3F4C25", 900: "#333D20", 950: "#202818",
+}
+const sand = {
+  50: "#FFFDF8", 100: "#FAF7EE", 200: "#F3EBDD", 300: "#E9DEC6", 400: "#DCCBA8",
+  500: "#C7B38A", 600: "#A99368", 700: "#86734E", 800: "#655638", 900: "#493D28", 950: "#2F281C",
 }
 const ink = {
-  50: "#F6F8F8", 100: "#EDF1F1", 200: "#DFE5E5", 300: "#C7D0D0", 400: "#9AA8A9",
-  500: "#738385", 600: "#55666A", 700: "#3F4F53", 800: "#2A383C", 900: "#1B282B", 950: "#101A1D",
+  50: "#FBF9F5", 100: "#F1ECE4", 200: "#E2D9CE", 300: "#CBBCAF", 400: "#A89485",
+  500: "#877466", 600: "#6E5B4E", 700: "#58473C", 800: "#42342B", 900: "#2B211B", 950: "#1F1712",
 }
 const success = {
   50: "#EEF8F2", 100: "#D6EEDF", 200: "#B0DDC1", 300: "#7FC49B", 400: "#4BA874",
@@ -58,10 +62,11 @@ module.exports = {
 
         // ── Token KOMPAS (dipertahankan agar kode lama tetap jalan) ────────
         brand,
+        sand,
         ink,
-        line: { DEFAULT: "#E0E6E6", strong: "#CBD5D5", soft: "#EBF0F0" },
-        surface: { DEFAULT: "#FFFFFF", muted: "#F8FAFA" },
-        canvas: { DEFAULT: "#F5F8F8", warm: "#F3F5F2" },
+        line: { DEFAULT: "#E5DCCE", strong: "#D1C2B0", soft: "#F2EDE5" },
+        surface: { DEFAULT: "#FFFFFF", muted: "#FBF9F5" },
+        canvas: { DEFAULT: "#FBF8F1", warm: "#F3EBDD" },
 
         // ── Warna semantik: alert / warning / success / info ───────────────
         // DEFAULT = teks & ikon, bg = latar, border = garis, solid = tombol/penuh
@@ -75,16 +80,16 @@ module.exports = {
 
         // ── Warna chart ────────────────────────────────────────────────────
         chart: {
-          revenue: "#1B7F78", cost: "#D8920F", profit: "#217247",
-          refund: "#C93030", neutral: "#9AA8A9", grid: "#E6ECEC",
+          revenue: "#71843F", cost: "#C7B38A", profit: "#2B211B",
+          refund: "#C93030", neutral: "#A89485", grid: "#E5DCCE",
         },
 
         // ── Alias untuk class lama yang sebelumnya tidak terdefinisi ───────
         // (text-deep-teal, bg-teal-mid, border-kompas-border, dst. sebelumnya
         //  tidak menghasilkan CSS sama sekali)
-        "deep-teal": brand[900],
+        "deep-teal": "#2B211B",
         "teal-mid": brand[600],
-        kompas: { border: "#E0E6E6", green: brand[700], gold: warning[600] },
+        kompas: { border: "#E5DCCE", green: "#71843F", gold: "#C7B38A" },
 
         // ── Remap palet bawaan Tailwind ke palet KOMPAS ────────────────────
         // Seluruh view lama yang masih memakai gray/slate/blue/emerald/red/amber
@@ -111,13 +116,13 @@ module.exports = {
         "3xl": "calc(var(--radius) + 8px)",
       },
       boxShadow: {
-        "2xs": "0 1px 1px rgba(16, 26, 29, 0.04)",
-        xs: "0 1px 2px rgba(16, 26, 29, 0.05)",
-        card: "0 1px 2px rgba(16, 26, 29, 0.05), 0 0 0 1px rgba(16, 26, 29, 0.02)",
-        soft: "0 2px 8px rgba(16, 26, 29, 0.06)",
-        "soft-md": "0 4px 14px rgba(16, 26, 29, 0.08)",
-        pop: "0 20px 48px rgba(16, 26, 29, 0.18)",
-        ring: "0 0 0 3px rgba(42, 154, 145, 0.22)",
+        "2xs": "0 1px 1px rgba(43, 33, 27, 0.04)",
+        xs: "0 1px 2px rgba(43, 33, 27, 0.05)",
+        card: "0 1px 2px rgba(43, 33, 27, 0.05), 0 0 0 1px rgba(43, 33, 27, 0.02)",
+        soft: "0 2px 8px rgba(43, 33, 27, 0.06)",
+        "soft-md": "0 4px 14px rgba(43, 33, 27, 0.08)",
+        pop: "0 20px 48px rgba(43, 33, 27, 0.18)",
+        ring: "0 0 0 3px rgba(113, 132, 63, 0.24)",
       },
       maxWidth: { shell: "1440px" },
       transitionDuration: { DEFAULT: "160ms", drawer: "240ms" },

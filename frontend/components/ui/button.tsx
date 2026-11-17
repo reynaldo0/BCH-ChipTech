@@ -17,7 +17,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "border border-brand-700 bg-brand-600 text-white shadow-[0_2px_5px_rgba(23,101,95,0.28)] hover:border-brand-800 hover:bg-brand-700 hover:shadow-[0_3px_8px_rgba(23,101,95,0.34)]",
+          "border border-brand-700 bg-brand-600 text-white shadow-[0_2px_5px_rgba(55,84,247,0.24)] hover:border-brand-800 hover:bg-brand-700 hover:shadow-[0_3px_8px_rgba(55,84,247,0.3)]",
         secondary:
           "border border-brand-100 bg-brand-50 text-brand-900 hover:bg-brand-100",
         outline:
@@ -34,7 +34,7 @@ const buttonVariants = cva(
         info: "border border-info-700 bg-info-600 text-white shadow-xs hover:bg-info-700",
         // alias lama
         primary:
-          "border border-brand-700 bg-brand-600 text-white shadow-[0_2px_5px_rgba(23,101,95,0.28)] hover:border-brand-800 hover:bg-brand-700 hover:shadow-[0_3px_8px_rgba(23,101,95,0.34)]",
+          "border border-brand-700 bg-brand-600 text-white shadow-[0_2px_5px_rgba(55,84,247,0.24)] hover:border-brand-800 hover:bg-brand-700 hover:shadow-[0_3px_8px_rgba(55,84,247,0.3)]",
         danger:
           "border border-danger-700 bg-danger-600 text-white shadow-xs hover:bg-danger-700",
         subtle:
