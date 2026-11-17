@@ -18,10 +18,42 @@ function authToken(): string | null {
   return window.localStorage.getItem("kompas_token")
 }
 
+export function currentRole(): Role {
+  if (typeof window === "undefined") return "owner"
+  return (window.localStorage.getItem("kompas_role") as Role | null) ?? "owner"
+}
+
+let bootstrap: Promise<string | null> | null = null
+
+/** Demo login: obtain a session token for the selected role once, so the API can enforce RBAC. */
+async function ensureToken(): Promise<string | null> {
+  const existing = authToken()
+  if (existing || typeof window === "undefined") return existing
+  if (!bootstrap) {
+    bootstrap = fetch(`${API_BASE}/api/auth/switch-role`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: currentRole() }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (body?.token) window.localStorage.setItem("kompas_token", body.token)
+        return body?.token ?? null
+      })
+      .catch(() => null)
+      .finally(() => {
+        bootstrap = null
+      })
+  }
+  return bootstrap
+}
+
 async function parseError(res: Response): Promise<string> {
   try {
     const payload = await res.json()
     if (typeof payload?.detail === "string") return payload.detail
+    if (typeof payload?.detail?.message === "string") return payload.detail.message
+    if (Array.isArray(payload?.detail)) return payload.detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join("; ")
     if (payload?.detail) return JSON.stringify(payload.detail)
     if (typeof payload?.message === "string") return payload.message
   } catch {
@@ -34,7 +66,7 @@ export async function fetchApi<T = any>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = authToken()
+  const token = await ensureToken()
   const headers = new Headers(options.headers)
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json")
@@ -47,6 +79,14 @@ export async function fetchApi<T = any>(
     headers,
     credentials: "include",
   })
+
+  if (res.status === 401 && typeof window !== "undefined" && token) {
+    // Expired demo session: drop it and retry once with a fresh token.
+    window.localStorage.removeItem("kompas_token")
+    if (!(options.headers as Record<string, string> | undefined)?.["x-retried"]) {
+      return fetchApi<T>(path, { ...options, headers: { ...(options.headers as Record<string, string>), "x-retried": "1" } })
+    }
+  }
 
   if (!res.ok) {
     throw new ApiError(await parseError(res), res.status)

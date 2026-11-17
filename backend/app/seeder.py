@@ -14,7 +14,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, utcnow
+from .db import SessionLocal, engine, now_wib, utcnow
 from .models import (
     Base,
     CapacityDay,
@@ -202,7 +202,7 @@ def seed_products(db: Session) -> None:
                 snapshot = StockSnapshot(
                     product_id=product.id,
                     stock=stock_qty,
-                    captured_at=utcnow(),
+                    captured_at=now_wib(),
                     source="seed_dummy_csv",
                     is_demo=True,
                 )

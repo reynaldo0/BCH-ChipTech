@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db, utcnow
 from ..models import Complaint, User
 from ..schemas import ComplaintOut, ComplaintUpdate
+from ..policy import mask_pii
 from ..security import get_current_user, get_current_user_optional
 from ..services import complaint_service
 
@@ -160,7 +161,7 @@ def create_complaint(
         category=payload.category,
         severity=payload.severity,
         status="BARU",
-        summary=payload.summary,
+        summary=mask_pii(payload.summary)[:1000],
         estimated_cost=payload.estimated_cost,
         confirmed_cost=None,
         source="manual",

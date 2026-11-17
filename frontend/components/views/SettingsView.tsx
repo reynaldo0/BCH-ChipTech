@@ -134,6 +134,8 @@ export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () =>
         </div>
       </div>
 
+      <JevStatusCard />
+
       {alertMsg && (
         <div
           className={`flex items-center justify-between gap-2 rounded-xl p-3 text-xs font-medium border ${
@@ -202,7 +204,7 @@ export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () =>
             <div>
               <h2 className="text-sm font-bold text-deep-teal">Tabel Aturan Potongan & Komisi Marketplace</h2>
               <p className="text-xs text-gray-500">
-                Aturan potongan ini dipakai untuk menghitung laba bersih tiap transaksi.
+                Aturan potongan ini dipakai untuk menghitung Laba Kontribusi tiap transaksi.
               </p>
             </div>
             <button
@@ -658,5 +660,36 @@ export function SettingsView({ onResetDemo, isResetting }: { onResetDemo?: () =>
         </div>
       )}
     </div>
+  )
+}
+
+
+function JevStatusCard() {
+  const [info, setInfo] = React.useState<Record<string, any> | null>(null)
+  React.useEffect(() => {
+    api.get("/api/chat/provider").then(setInfo).catch(() => setInfo(null))
+  }, [])
+  if (!info) return null
+  const active = info.mode === "jev"
+  return (
+    <section className="card card-pad space-y-2" aria-labelledby="jev-title">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="jev-title" className="font-display text-base font-semibold text-ink-950">AI opsional: Jev (TypeSafe) via OpenRouter</h2>
+        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${active ? "border-brand-200 bg-brand-50 text-brand-800" : "border-border bg-ink-50 text-ink-700"}`}>
+          {info.mode_label}
+        </span>
+      </div>
+      <p className="text-[13px] text-ink-600">{info.reason}</p>
+      <dl className="grid gap-x-6 gap-y-1 text-[12.5px] text-ink-700 sm:grid-cols-2">
+        <div><dt className="inline text-ink-500">Model: </dt><dd className="inline font-mono">{info.model}</dd></div>
+        <div><dt className="inline text-ink-500">Kunci API: </dt><dd className="inline">{info.key_present ? "terpasang" : "belum diisi"}</dd></div>
+        <div><dt className="inline text-ink-500">Batas waktu: </dt><dd className="inline">{info.timeout_ms} ms + {info.retries}× ulang</dd></div>
+        <div><dt className="inline text-ink-500">Gagal beruntun: </dt><dd className="inline">{info.consecutive_failures} (jeda 10 menit setelah 3)</dd></div>
+      </dl>
+      <p className="text-[12px] text-ink-500">
+        Jev hanya boleh menaikkan kewaspadaan (umum → belum pasti/keluhan), tidak pernah menulis jawaban atau menghitung uang.
+        Aktifkan dengan <code className="font-mono">JEV_ENABLED=true</code> dan <code className="font-mono">OPENROUTER_API_KEY</code> di <code className="font-mono">backend/.env</code>, lalu mulai ulang backend.
+      </p>
+    </section>
   )
 }

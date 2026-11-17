@@ -75,7 +75,7 @@ def run_chat_evaluation(
 ) -> EvaluationRun:
     if provider == "jev" and not settings.jev_ready:
         raise ValueError(
-            "Jev belum dikonfigurasi (JEV_ENABLED/JEV_API_KEY). "
+            "Jev belum dikonfigurasi (JEV_ENABLED=true dan OPENROUTER_API_KEY). "
             "Evaluasi Jev tidak dapat dijalankan tanpa key nyata."
         )
     cases = list(
@@ -105,6 +105,7 @@ def run_chat_evaluation(
             persist=False,
             create_complaint=False,
             actor=actor,
+            use_ai=provider == "jev",
         )
         predicted_abstain = bool(
             result.decision == DECISION_ESCALATE

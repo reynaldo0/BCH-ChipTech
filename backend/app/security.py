@@ -108,3 +108,48 @@ def require_roles(*roles: str):
 
 def require_role(*roles: str):
     return require_roles(*roles)
+
+
+# --- Role-based access (proposal Lampiran 6, test S-05) -----------------------
+FINANCE_ROLES = ("owner", "manager", "judge")
+ADMIN_ROLES = ("owner", "manager")
+COST_VISIBLE_ROLES = FINANCE_ROLES
+
+
+def _deny(request: Request, db: Session, user: User) -> HTTPException:
+    from .models import AuditLog
+
+    db.add(
+        AuditLog(
+            actor=user.username,
+            action="access.denied",
+            entity="endpoint",
+            entity_id=request.url.path[:120],
+            detail_json={"role": user.role, "method": request.method},
+        )
+    )
+    db.commit()
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Akses ditolak: peran ini tidak boleh melihat modal, margin, atau laba.",
+    )
+
+
+def require_finance(
+    request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> User:
+    if user.role not in FINANCE_ROLES:
+        raise _deny(request, db, user)
+    return user
+
+
+def require_admin(
+    request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> User:
+    if user.role not in ADMIN_ROLES:
+        raise _deny(request, db, user)
+    return user
+
+
+def can_see_cost(user: User | None) -> bool:
+    return bool(user and user.role in COST_VISIBLE_ROLES)

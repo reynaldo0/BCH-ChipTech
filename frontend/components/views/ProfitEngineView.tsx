@@ -1,589 +1,589 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
-import {
-  Upload,
-  RefreshCw,
-  Search,
-  Filter,
-  AlertTriangle,
-  FileSpreadsheet,
-  CheckCircle2,
-  XCircle,
-  HelpCircle,
-  ChevronRight,
-  X,
-  FileText,
-  DollarSign,
-  ArrowDownRight,
-  TrendingDown,
-  Info,
-} from "lucide-react"
-import { api } from "@/lib/api"
-import { formatIDR } from "@/lib/utils"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Loader2, Search, Upload, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
-export function ProfitEngineView() {
-  const [summary, setSummary] = useState<any>(null)
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [selectedTx, setSelectedTx] = useState<any | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [calcLoading, setCalcLoading] = useState(false)
-  const [marketplaceFilter, setMarketplaceFilter] = useState<string>("")
-  const [statusFilter, setStatusFilter] = useState<string>("")
-  const [searchQuery, setSearchQuery] = useState<string>("")
-  const [showImportModal, setShowImportModal] = useState(false)
+import { API_BASE, api } from "@/lib/api"
+import { cn, formatIDR } from "@/lib/utils"
 
-  // Import state
-  const [importFile, setImportFile] = useState<File | null>(null)
-  const [importPreview, setImportPreview] = useState<any | null>(null)
-  const [importLoading, setImportLoading] = useState(false)
-  const [importSuccess, setImportSuccess] = useState<string | null>(null)
+/* ── Types ─────────────────────────────────────────────────────────────── */
+interface Contribution {
+  gross_sales: string
+  dana_dilepas: string
+  lk1: string
+  lk1_margin_pct: string | null
+  lk1_status: string
+  lk1_rows_missing: number
+  lk2: string | null
+  lk2_partial: string
+  lk2_status: string
+  lk2_rows_missing: number
+  operating_profit_note: string
+  definitions: Record<string, string>
+}
+interface SkuRow {
+  sku: string
+  product_name: string | null
+  marketplaces: string[]
+  qty: number
+  gross_sales: string
+  deduction_pct: string | null
+  lk1: string
+  lk1_margin_pct: string | null
+  lk2: string | null
+  modal_unit: string | null
+  break_even_price: string | null
+  lk1_status: string
+  lk2_status: string
+  missing_components: string[]
+  negative_rows: number
+  reconciliation_rows: number
+  data_warnings: string[]
+}
+interface ChannelRow {
+  marketplace: string
+  gross_sales: string
+  dana_dilepas: string
+  lk1: string
+  deduction_pct: string | null
+  lk1_margin_pct: string | null
+  transaction_count: number
+  lk1_rows_missing: number
+}
+interface Summary {
+  kpi: Record<string, any>
+  contribution: Contribution
+  by_sku: SkuRow[]
+  by_marketplace: ChannelRow[]
+  missing_components: { label: string; transaction_count: number }[]
+}
+interface Preview {
+  batch_id: number
+  filename: string
+  total_rows: number
+  valid_rows: number
+  invalid_rows: number
+  duplicate_rows: number
+  unmatched_sku: number
+  detected_columns: string[]
+  suggested_mapping: Record<string, string>
+  field_labels: Record<string, string>
+  required_fields: string[]
+  preview_rows: Record<string, any>[]
+  issues: { row_number: number; field: string; value: string; reason: string; severity: string }[]
+  cleaning: { header_row: number; dropped: Record<string, number>; dropped_total: number; kept_rows: number }
+}
 
-  useEffect(() => {
-    loadData()
-  }, [marketplaceFilter, statusFilter])
+const pct = (value: string | null | undefined) =>
+  value == null ? "—" : `${Number(value).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
 
-  async function loadData() {
+function StatusText({ status, detail }: { status: string; detail?: string }) {
+  const ok = status === "Lengkap"
+  const Icon = ok ? CheckCircle2 : AlertTriangle
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", ok ? "text-success-700" : "text-warning-800")} title={detail}>
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {status}
+    </span>
+  )
+}
+
+/* ── Import wizard (F8): upload → cleaning report → mapping → confirm ─── */
+function ImportWizard({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [marketplace, setMarketplace] = useState("")
+  const [preview, setPreview] = useState<Preview | null>(null)
+  const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [result, setResult] = useState<Record<string, any> | null>(null)
+
+  async function upload(selected: File) {
+    setError("")
+    setResult(null)
+    setPreview(null)
+    const ext = selected.name.split(".").pop()?.toLowerCase()
+    if (!ext || !["csv", "xlsx"].includes(ext)) {
+      setError("Format file harus .csv atau .xlsx (file .xlsm, .pdf, dan lainnya ditolak).")
+      return
+    }
+    if (selected.size > 10 * 1024 * 1024) {
+      setError("Ukuran file melebihi 10 MB.")
+      return
+    }
+    setFile(selected)
     setLoading(true)
     try {
-      const [sumRes, txRes] = await Promise.all([
-        api.get("/api/profit/summary"),
-        api.get(
-          `/api/profit/transactions?marketplace=${marketplaceFilter}&calc_status=${statusFilter}&search=${searchQuery}&limit=50`
-        ),
-      ])
-      setSummary(sumRes)
-      setTransactions(txRes.items || [])
+      const form = new FormData()
+      form.append("file", selected)
+      const query = marketplace ? `?marketplace=${encodeURIComponent(marketplace)}` : ""
+      const data = await api.upload<Preview>(`/api/imports/preview${query}`, form)
+      setPreview(data)
+      setMapping(data.suggested_mapping)
     } catch (err) {
-      console.error("Gagal memuat profit engine:", err)
+      setError(err instanceof Error ? err.message : "Pratinjau gagal.")
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleRecalculate() {
-    setCalcLoading(true)
+  async function confirm() {
+    if (!preview) return
+    setLoading(true)
+    setError("")
     try {
-      await api.post("/api/profit/calculate", { scope: "all" })
-      await loadData()
-      alert("Kalkulasi profit deterministik berhasil dijalankan ulang!")
-    } catch (err: any) {
-      alert(`Gagal menghitung profit: ${err.message}`)
+      const clean = Object.fromEntries(Object.entries(mapping).filter(([, target]) => target))
+      setResult(await api.post(`/api/imports/${preview.batch_id}/confirm`, { mapping: clean }))
+      onDone()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Impor gagal.")
     } finally {
-      setCalcLoading(false)
+      setLoading(false)
     }
   }
 
-  async function handleUploadPreview(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImportFile(file)
-    setImportLoading(true)
-    setImportSuccess(null)
-    setImportPreview(null)
-
-    const formData = new FormData()
-    formData.append("file", file)
-
-    try {
-      const data = await api.upload("/api/imports/preview", formData)
-      setImportPreview(data)
-    } catch (err: any) {
-      alert(`Error preview CSV: ${err.message}`)
-    } finally {
-      setImportLoading(false)
-    }
-  }
-
-  async function handleConfirmImport() {
-    if (!importPreview?.batch_id) return
-    setImportLoading(true)
-    try {
-      const res = await api.post(`/api/imports/${importPreview.batch_id}/confirm`, {
-        mapping: importPreview.suggested_mapping,
-      })
-      setImportSuccess(`Berhasil mengimpor ${res.valid_rows} transaksi baru!`)
-      setImportPreview(null)
-      setImportFile(null)
-      await loadData()
-    } catch (err: any) {
-      alert(`Gagal konfirmasi impor: ${err.message}`)
-    } finally {
-      setImportLoading(false)
-    }
-  }
-
-  async function handleOpenDetail(id: number) {
-    try {
-      const res = await api.get(`/api/profit/transactions/${id}`)
-      setSelectedTx(res)
-    } catch (err: any) {
-      alert(`Gagal membuka detail transaksi: ${err.message}`)
-    }
-  }
-
-  const kpi = summary?.kpi || {}
+  const targets = preview ? Object.keys(preview.field_labels) : []
+  const missingRequired = preview
+    ? preview.required_fields.filter((field) => !Object.values(mapping).includes(field))
+    : []
 
   return (
-    <div className="space-y-6 pb-16">
-      {/* Header bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-950/40 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="import-title">
+      <div className="card relative w-full max-w-3xl space-y-4 p-5 sm:p-6">
+        <button onClick={onClose} className="absolute right-3 top-3 rounded-md p-1.5 text-ink-500 hover:bg-ink-100" aria-label="Tutup">
+          <X className="h-4 w-4" />
+        </button>
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-teal-mid uppercase tracking-wider">
-            <DollarSign className="h-4 w-4" />
-            <span>Ringkasan laba & rekonsiliasi</span>
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-deep-teal">
-            Kalkulator Laba Bersih Deterministik
-          </h2>
-          <p className="text-sm text-gray-600">
-            Perhitungan finansial berbasis matematika presisi (Decimal exact math, null is never zero), audit komisi marketplace, dan proteksi margin.
+          <p className="eyebrow">Impor laporan marketplace</p>
+          <h2 id="import-title" className="mt-1 font-display text-lg font-semibold text-ink-950">Unggah CSV/XLSX → cek pemetaan → hitung</h2>
+          <p className="mt-1 text-[13px] text-ink-600">
+            Modal produk diambil otomatis dari katalog Product Brain bila kolom HPP kosong. Baris rusak dikarantina, bukan menjatuhkan impor.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
-          >
-            <Upload className="h-3.5 w-3.5 text-blue-600" />
-            <span>Impor Laporan Marketplace</span>
-          </button>
-
-          <button
-            onClick={handleRecalculate}
-            disabled={calcLoading}
-            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 transition-all disabled:opacity-50 shadow-md shadow-blue-500/20"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${calcLoading ? "animate-spin" : ""}`} />
-            <span>Hitung Ulang Semua (156 tx)</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Reconciliation Required Warning Banner if needed */}
-      {kpi.reconciliation_count > 0 && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-4 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <div className="font-bold text-sm">
-                Peringatan: {kpi.reconciliation_count} Transaksi Membutuhkan Rekonsiliasi Aturan Fee!
+        {result ? (
+          <div className="space-y-3">
+            <p className="flex items-center gap-2 rounded-md border border-success-border bg-success-bg px-3 py-2.5 text-[13px] text-success-900">
+              <CheckCircle2 className="h-4 w-4" /> {result.valid_rows} baris masuk dan Laba Kontribusi sudah dihitung ulang.
+            </p>
+            <dl className="grid grid-cols-2 gap-2 text-[13px] sm:grid-cols-4">
+              {[["Masuk", result.valid_rows], ["Karantina", result.invalid_rows], ["Duplikat ditolak", result.duplicate_rows], ["SKU asing", result.unmatched_sku]].map(([k, v]) => (
+                <div key={k as string} className="rounded-md border border-border p-2.5"><dt className="text-ink-500">{k}</dt><dd className="tnum text-lg font-semibold">{v}</dd></div>
+              ))}
+            </dl>
+            <Button onClick={onClose}>Lihat dasbor</Button>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <div>
+                <label className="field-label" htmlFor="import-file">Berkas laporan (.csv / .xlsx, maks 10 MB)</label>
+                <input
+                  id="import-file"
+                  type="file"
+                  accept=".csv,.xlsx"
+                  aria-describedby="import-error"
+                  onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])}
+                  className="field-control file:mr-3 file:rounded file:border-0 file:bg-brand-50 file:px-2.5 file:py-1 file:text-[12px] file:font-medium file:text-brand-800"
+                />
               </div>
-              <p className="text-xs text-amber-800 mt-0.5">
-                Nilai komisi pada laporan marketplace berbeda dengan parameter acuan tabel fee rules. Sesuai prinsip KOMPAS, status ditandai RECONCILIATION_REQUIRED dan tidak diklaim sebagai profit final.
-              </p>
+              <div>
+                <label className="field-label" htmlFor="import-mp">Kanal (bila tidak ada kolomnya)</label>
+                <select id="import-mp" className="field-control" value={marketplace} onChange={(e) => setMarketplace(e.target.value)}>
+                  <option value="">Dari kolom file</option>
+                  <option>Shopee</option>
+                  <option>TikTok Shop</option>
+                  <option>Lazada</option>
+                </select>
+              </div>
             </div>
-          </div>
-          <button
-            onClick={() => setStatusFilter("RECONCILIATION_REQUIRED")}
-            className="shrink-0 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 transition-colors"
-          >
-            Filter Transaksi Perlu Rekonsiliasi
-          </button>
-        </div>
-      )}
+            <p className="text-[12px] text-ink-500">
+              Belum punya format? <a className="link-quiet text-[12px]" href={`${API_BASE}/api/imports/templates/shopee`}>Unduh template CSV KOMPAS</a>
+            </p>
 
-      {/* KPI Stats Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="glass-card p-5">
-          <div className="text-xs font-medium text-gray-500">Gross Sales Terdata</div>
-          <div className="mt-1 text-2xl font-bold text-deep-teal tabular-nums">
-            {formatIDR(kpi.gross_sales)}
-          </div>
-          <div className="mt-1 text-xs text-gray-400">Total {kpi.transaction_count} transaksi</div>
-        </div>
+            {error ? <p id="import-error" role="alert" className="rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-[13px] text-danger-900">{error}</p> : null}
+            {loading ? <p className="flex items-center gap-2 text-[13px] text-ink-500"><Loader2 className="h-4 w-4 animate-spin" /> Membersihkan dan membaca {file?.name}…</p> : null}
 
-        <div className="glass-card p-5">
-          <div className="text-xs font-medium text-gray-500">Pendapatan Bersih (Net)</div>
-          <div className="mt-1 text-2xl font-bold text-teal-mid tabular-nums">
-            {formatIDR(kpi.net_revenue_complete)}
-          </div>
-          <div className="mt-1 text-xs text-gray-400">Gross - Diskon - Retur</div>
-        </div>
+            {preview ? (
+              <div className="space-y-4">
+                <div className="rounded-md border border-border bg-ink-50/60 p-3 text-[13px] text-ink-700">
+                  <strong>{preview.filename}</strong>: header ditemukan di baris {preview.cleaning.header_row}; {preview.cleaning.dropped_total} baris non-data dibuang
+                  {preview.cleaning.dropped_total ? ` (judul ${preview.cleaning.dropped.above_header}, kosong ${preview.cleaning.dropped.blank}, Total/Catatan ${preview.cleaning.dropped.total_or_note}, sel gabungan ${preview.cleaning.dropped.merged_or_sparse})` : ""}.
+                  {" "}{preview.valid_rows} siap, {preview.invalid_rows} karantina, {preview.duplicate_rows} duplikat, {preview.unmatched_sku} SKU asing.
+                </div>
 
-        <div className="glass-card p-5 bg-emerald-50/30 border-emerald-200">
-          <div className="text-xs font-medium text-emerald-800 flex items-center justify-between">
-            <span>Laba Bersih Lengkap</span>
-            <span className="font-bold text-xs">{kpi.margin_complete_pct || "0"}%</span>
-          </div>
-          <div className="mt-1 text-2xl font-bold text-kompas-green tabular-nums">
-            {formatIDR(kpi.profit_complete)}
-          </div>
-          <div className="mt-1 text-xs text-emerald-700/80">
-            {kpi.complete_count || 0} transaksi lengkap
-          </div>
-        </div>
+                <div>
+                  <p className="field-label">Pemetaan kolom — periksa sebelum menghitung</p>
+                  <div className="max-h-64 overflow-y-auto rounded-md border border-border">
+                    <table className="data-table">
+                      <thead><tr><th>Kolom di file</th><th>Dibaca sebagai</th></tr></thead>
+                      <tbody>
+                        {preview.detected_columns.map((column) => (
+                          <tr key={column}>
+                            <td className="font-mono text-[12px]">{column}</td>
+                            <td>
+                              <select
+                                aria-label={`Pemetaan ${column}`}
+                                className="field-control h-8 py-1"
+                                value={mapping[column] ?? ""}
+                                onChange={(e) => setMapping((m) => ({ ...m, [column]: e.target.value }))}
+                              >
+                                <option value="">— abaikan —</option>
+                                {targets.map((target) => (
+                                  <option key={target} value={target}>
+                                    {preview.field_labels[target]}{preview.required_fields.includes(target) ? " *" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {missingRequired.length ? (
+                    <p className="mt-1.5 text-[12px] text-danger-700">Wajib dipetakan: {missingRequired.map((f) => preview.field_labels[f]).join(", ")}</p>
+                  ) : null}
+                </div>
 
-        <div className="glass-card p-5">
-          <div className="text-xs font-medium text-gray-500">Estimasi Parsial & Rekonsiliasi</div>
-          <div className="mt-1 text-2xl font-bold text-amber-700 tabular-nums">
-            {formatIDR(kpi.profit_reconciliation || kpi.profit_partial_estimate)}
+                {preview.issues.length ? (
+                  <details open={preview.issues.length <= 6}>
+                    <summary className="cursor-pointer text-[13px] font-medium text-ink-800">Karantina & peringatan ({preview.issues.length})</summary>
+                    <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[12.5px]">
+                      {preview.issues.map((issue, index) => (
+                        <li key={index} className={issue.severity === "ERROR" ? "text-danger-800" : "text-warning-800"}>
+                          Baris {issue.row_number} · {issue.field}: {issue.reason} <span className="font-mono text-ink-500">{String(issue.value).slice(0, 40)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={onClose}>Batal</Button>
+                  <Button onClick={() => void confirm()} loading={loading} disabled={missingRequired.length > 0 || preview.valid_rows === 0}>
+                    Konfirmasi & hitung Laba Kontribusi
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── Transaction detail ────────────────────────────────────────────────── */
+function TransactionDetail({ id, onClose }: { id: number; onClose: () => void }) {
+  const [data, setData] = useState<any>(null)
+  useEffect(() => {
+    api.get(`/api/profit/transactions/${id}`).then(setData).catch(() => setData({ error: true }))
+  }, [id])
+  const tx = data?.transaction
+  const calc = data?.calculation
+  const comps = calc?.trace?.components ?? {}
+  const level = calc?.contribution
+  const line = (label: string, value: string | null | undefined, strong = false, minus = true) => (
+    <div className={cn("flex justify-between px-3 py-1.5 text-[13px]", strong && "rounded-md bg-brand-50 font-semibold text-brand-900")}>
+      <span>{label}</span>
+      <span className="tnum">{value == null ? <em className="text-warning-700">belum ada</em> : `${minus ? "−" : ""}${formatIDR(value)}`}</span>
+    </div>
+  )
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/40 p-4" role="dialog" aria-modal="true" aria-label="Rincian transaksi">
+      <div className="card relative max-h-[90vh] w-full max-w-xl overflow-y-auto p-5">
+        <button onClick={onClose} className="absolute right-3 top-3 rounded-md p-1.5 text-ink-500 hover:bg-ink-100" aria-label="Tutup"><X className="h-4 w-4" /></button>
+        {!tx ? (
+          <p className="text-[13px] text-ink-500">{data?.error ? "Gagal memuat." : "Memuat…"}</p>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <p className="eyebrow">{tx.marketplace} · {tx.transaction_date}</p>
+              <h3 className="font-mono text-base font-semibold">{tx.transaction_id}</h3>
+              <p className="text-[13px] text-ink-600">{tx.product_name ?? tx.sku} × {tx.qty}</p>
+            </div>
+            <div className="divide-y divide-border rounded-md border border-border">
+              {line("Omzet", tx.gross_sales, false, false)}
+              {line("Diskon penjual", tx.seller_discount)}
+              {line("Refund", tx.refund_amount)}
+              {line("Komisi marketplace", comps.marketplace_commission)}
+              {line(calc?.trace?.fixed_fee_source === "order_allocation" ? "Biaya tetap (dialokasikan dari pesanan)" : "Biaya tetap", comps.fixed_fee)}
+              {line("Ongkir ditanggung penjual", comps.seller_shipping_cost)}
+              {line("Logistik retur", comps.return_logistics_cost)}
+              {line("Biaya lain", comps.other_costs)}
+              {line("= Dana dilepas", level?.dana_dilepas, true, false)}
+              {line(calc?.trace?.cogs_source === "product_fallback" ? "Modal (dari katalog)" : "Modal", comps.cogs)}
+              {line("= Laba Kontribusi I", level?.lk1, true, false)}
+              {line("Biaya packing", comps.packing_cost)}
+              {line("= Laba Kontribusi II", level?.lk2, true, false)}
+            </div>
+            {calc?.warnings?.length ? (
+              <ul className="space-y-1 rounded-md border border-warning-border bg-warning-bg p-3 text-[12.5px] text-warning-900">
+                {calc.warnings.map((w: string, i: number) => <li key={i}>• {w}</li>)}
+              </ul>
+            ) : null}
           </div>
-          <div className="mt-1 text-xs text-amber-600">
-            {kpi.reconciliation_count || 0} rekonsiliasi, {kpi.partial_count || 0} parsial
-          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── Dashboard (F9/F10) ────────────────────────────────────────────────── */
+export function ProfitEngineView() {
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [marketplace, setMarketplace] = useState("")
+  const [start, setStart] = useState("")
+  const [end, setEnd] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+  const [search, setSearch] = useState("")
+  const [onlyIncomplete, setOnlyIncomplete] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [detailId, setDetailId] = useState<number | null>(null)
+
+  const query = useMemo(() => {
+    const params = new URLSearchParams()
+    if (marketplace) params.set("marketplace", marketplace)
+    if (start) params.set("start_date", start)
+    if (end) params.set("end_date", end)
+    return params
+  }, [marketplace, start, end])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError("")
+    try {
+      const txParams = new URLSearchParams(query)
+      if (statusFilter) txParams.set("calc_status", statusFilter)
+      if (search) txParams.set("search", search)
+      txParams.set("limit", "100")
+      const [sum, tx] = await Promise.all([
+        api.get<Summary>(`/api/profit/summary?${query.toString()}`),
+        api.get<{ items: any[] }>(`/api/profit/transactions?${txParams.toString()}`),
+      ])
+      setSummary(sum)
+      setTransactions(tx.items)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Data laba gagal dimuat.")
+    } finally {
+      setLoading(false)
+    }
+  }, [query, statusFilter, search])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const c = summary?.contribution
+  const kpi = summary?.kpi ?? {}
+  const skuRows = (summary?.by_sku ?? []).filter((row) => !onlyIncomplete || row.lk2_status !== "Lengkap" || row.data_warnings.length)
+
+  if (error && !summary) {
+    return <p role="alert" className="card card-pad text-[13px] text-danger-800">{error}</p>
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Toolbar */}
+      <div className="card card-pad flex flex-wrap items-end gap-3">
+        <div>
+          <label className="field-label" htmlFor="f-mp">Kanal</label>
+          <select id="f-mp" className="field-control h-9 w-40" value={marketplace} onChange={(e) => setMarketplace(e.target.value)}>
+            <option value="">Semua kanal</option>
+            <option>Shopee</option>
+            <option>TikTok Shop</option>
+            <option>Lazada</option>
+          </select>
+        </div>
+        <div>
+          <label className="field-label" htmlFor="f-start">Dari</label>
+          <input id="f-start" type="date" className="field-control h-9" value={start} onChange={(e) => setStart(e.target.value)} />
+        </div>
+        <div>
+          <label className="field-label" htmlFor="f-end">Sampai</label>
+          <input id="f-end" type="date" className="field-control h-9" value={end} onChange={(e) => setEnd(e.target.value)} />
+        </div>
+        {(marketplace || start || end) ? <Button variant="ghost" size="sm" onClick={() => { setMarketplace(""); setStart(""); setEnd("") }}>Reset</Button> : null}
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <a href={`${API_BASE}/api/imports/templates/shopee`}><Download /> Template CSV</a>
+          </Button>
+          <Button onClick={() => setShowImport(true)}><Upload /> Unggah laporan</Button>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="glass-card p-4 flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Cari ID transaksi, order, SKU..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && loadData()}
-              className="w-full rounded-xl border border-kompas-border bg-white pl-9 pr-3 py-1.5 text-xs text-deep-teal focus:border-teal-mid focus:outline-none"
-            />
-          </div>
+      {loading && !summary ? <p className="flex items-center gap-2 text-[13px] text-ink-500"><Loader2 className="h-4 w-4 animate-spin" /> Menghitung…</p> : null}
 
-          <select
-            value={marketplaceFilter}
-            onChange={(e) => setMarketplaceFilter(e.target.value)}
-            className="rounded-xl border border-kompas-border bg-white px-3 py-1.5 text-xs font-medium text-deep-teal"
-          >
-            <option value="">Semua Marketplace</option>
-            <option value="Shopee">Shopee</option>
-            <option value="TikTok Shop">TikTok Shop</option>
-            <option value="Lazada">Lazada</option>
-          </select>
+      {c ? (
+        <>
+          {/* Profit tiers (proposal Tabel 3.3) */}
+          <section aria-labelledby="tiers" className="space-y-3">
+            <h2 id="tiers" className="font-display text-base font-semibold text-ink-950">Tingkatan laba</h2>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {[
+                { label: "Omzet", value: c.gross_sales, note: `${kpi.transaction_count ?? 0} baris produk` },
+                { label: "Dana dilepas", value: c.dana_dilepas, note: `Potongan ${pct(String(100 - (Number(c.dana_dilepas) / Math.max(1, Number(c.gross_sales))) * 100))} dari omzet` },
+                { label: "Laba Kontribusi I", value: c.lk1, note: `Margin ${pct(c.lk1_margin_pct)} · ${c.lk1_status}`, emphasis: true, status: c.lk1_status },
+                {
+                  label: "Laba Kontribusi II",
+                  value: c.lk2,
+                  note: c.lk2_status === "Lengkap" ? "Setelah biaya packing" : `Belum lengkap: ${c.lk2_rows_missing} baris tanpa biaya packing (sementara ${formatIDR(c.lk2_partial)})`,
+                  status: c.lk2_status,
+                },
+                { label: "Laba operasional", value: null, note: "Di luar cakupan (gaji, sewa tidak dihitung)" },
+              ].map((tier) => (
+                <div key={tier.label} className={cn("card p-4", tier.emphasis && "border-brand-300 bg-brand-50/50")}>
+                  <p className="text-[12px] font-medium text-ink-600">{tier.label}</p>
+                  <p className="tnum mt-1 font-display text-xl font-semibold text-ink-950">{tier.value == null ? "—" : formatIDR(tier.value)}</p>
+                  <p className="mt-1 text-[12px] leading-4 text-ink-600">
+                    {tier.status && tier.status !== "Lengkap" ? <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-warning-600" aria-label="Belum lengkap" /> : null}
+                    {tier.note}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="text-[12px] text-ink-500">
+              KOMPAS tidak memakai istilah "laba bersih": angka di atas adalah laba kontribusi. Nilai kosong tidak pernah dianggap nol.
+            </p>
+            {kpi.reconciliation_count ? (
+              <p className="flex items-start gap-2 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning-900">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                {kpi.reconciliation_count} baris perlu rekonsiliasi (biaya tidak cocok aturan, duplikat, atau SKU asing).
+                <button className="ml-auto shrink-0 underline underline-offset-2" onClick={() => setStatusFilter("RECONCILIATION_REQUIRED")}>Tampilkan</button>
+              </p>
+            ) : null}
+          </section>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-kompas-border bg-white px-3 py-1.5 text-xs font-medium text-deep-teal"
-          >
-            <option value="">Semua Status Kalkulasi</option>
-            <option value="COMPLETE">Lengkap (COMPLETE)</option>
-            <option value="PARTIAL">Parsial (PARTIAL)</option>
-            <option value="RECONCILIATION_REQUIRED">Perlu Rekonsiliasi</option>
-            <option value="NOT_CALCULABLE">Tidak Dapat Dihitung</option>
-          </select>
+          {/* Per channel */}
+          <section className="card overflow-hidden" aria-labelledby="by-channel">
+            <h2 id="by-channel" className="border-b border-border px-5 py-3 font-display text-base font-semibold">Per kanal</h2>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead><tr><th>Kanal</th><th className="text-right">Baris</th><th className="text-right">Omzet</th><th className="text-right">Potongan</th><th className="text-right">Dana dilepas</th><th className="text-right">LK I</th><th className="text-right">Margin LK I</th></tr></thead>
+                <tbody>
+                  {summary!.by_marketplace.map((row) => (
+                    <tr key={row.marketplace}>
+                      <td className="font-medium">{row.marketplace}</td>
+                      <td className="tnum text-right">{row.transaction_count}</td>
+                      <td className="tnum text-right">{formatIDR(row.gross_sales)}</td>
+                      <td className="tnum text-right">{pct(row.deduction_pct)}</td>
+                      <td className="tnum text-right">{formatIDR(row.dana_dilepas)}</td>
+                      <td className="tnum text-right font-semibold">{formatIDR(row.lk1)}</td>
+                      <td className="tnum text-right">{pct(row.lk1_margin_pct)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-          {(marketplaceFilter || statusFilter || searchQuery) && (
-            <button
-              onClick={() => {
-                setMarketplaceFilter("")
-                setStatusFilter("")
-                setSearchQuery("")
-              }}
-              className="text-xs text-red-600 hover:underline px-2 py-1"
-            >
-              Reset Filter
-            </button>
-          )}
-        </div>
-
-        <div className="text-xs text-gray-500 font-medium">
-          Menampilkan {transactions.length} dari {kpi.transaction_count || 156} transaksi
-        </div>
-      </div>
-
-      {/* Transactions Table */}
-      <div className="glass-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-kompas-border bg-canvas/60 text-gray-600">
-                <th className="py-3 px-4 font-semibold">Transaksi ID</th>
-                <th className="py-3 px-3 font-semibold">Marketplace</th>
-                <th className="py-3 px-3 font-semibold">Tanggal</th>
-                <th className="py-3 px-3 font-semibold">SKU Produk</th>
-                <th className="py-3 px-3 font-semibold text-right">Qty</th>
-                <th className="py-3 px-3 font-semibold text-right">Penjualan Kotor</th>
-                <th className="py-3 px-3 font-semibold text-right">Laba Bersih</th>
-                <th className="py-3 px-3 font-semibold text-right">Margin %</th>
-                <th className="py-3 px-4 font-semibold text-center">Status</th>
-                <th className="py-3 px-3 font-semibold text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-kompas-border/60">
-              {transactions.map((tx) => {
-                const isComplete = tx.calc_status === "COMPLETE"
-                const isRecon = tx.calc_status === "RECONCILIATION_REQUIRED"
-                const isPartial = tx.calc_status === "PARTIAL"
-                const isNegative = tx.profit && parseFloat(tx.profit) < 0
-
-                return (
-                  <tr
-                    key={tx.id}
-                    onClick={() => handleOpenDetail(tx.id)}
-                    className="hover:bg-teal-50/40 cursor-pointer transition-colors"
-                  >
-                    <td className="py-3 px-4 font-mono font-bold text-blue-600">
-                      {tx.transaction_id}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700">
-                        {tx.marketplace}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-gray-500">{tx.transaction_date}</td>
-                    <td className="py-3 px-3 font-mono text-deep-teal">{tx.sku}</td>
-                    <td className="py-3 px-3 text-right font-medium">{tx.qty}</td>
-                    <td className="py-3 px-3 text-right font-semibold tabular-nums">
-                      {formatIDR(tx.gross_sales)}
-                    </td>
-                    <td
-                      className={`py-3 px-3 text-right font-bold tabular-nums ${
-                        isNegative
-                          ? "text-red-600"
-                          : isComplete
-                          ? "text-kompas-green"
-                          : "text-amber-600"
-                      }`}
-                    >
-                      {formatIDR(tx.profit)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-semibold">
-                      {tx.margin_pct ? `${tx.margin_pct}%` : "-"}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span
-                        className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
-                          isComplete
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            : isRecon
-                            ? "bg-amber-50 text-amber-800 border-amber-300"
-                            : isPartial
-                            ? "bg-yellow-50 text-yellow-800 border-yellow-200"
-                            : "bg-red-50 text-red-800 border-red-200"
-                        }`}
-                      >
-                        {isComplete
-                          ? "LENGKAP"
-                          : isRecon
-                          ? "REKONSILIASI"
-                          : isPartial
-                          ? "PARSIAL"
-                          : "TIDAK VALID"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleOpenDetail(tx.id)
-                        }}
-                        className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-deep-teal"
-                        title="Lihat Waterfall Biaya"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </td>
+          {/* Per SKU (Lampiran 2) */}
+          <section className="card overflow-hidden" aria-labelledby="by-sku">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
+              <div>
+                <h2 id="by-sku" className="font-display text-base font-semibold">Laba Kontribusi per SKU</h2>
+                <p className="text-[12px] text-ink-500">Diurutkan menurut LK I. Harga impas = modal ÷ (1 − tingkat potongan SKU).</p>
+              </div>
+              <label className="flex items-center gap-2 text-[13px] text-ink-700">
+                <input type="checkbox" className="accent-brand-700" checked={onlyIncomplete} onChange={(e) => setOnlyIncomplete(e.target.checked)} />
+                Hanya yang belum lengkap / ada peringatan
+              </label>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>SKU</th><th className="text-right">Qty</th><th className="text-right">Omzet</th><th className="text-right">Potongan</th>
+                    <th className="text-right">LK I</th><th className="text-right">Margin</th><th className="text-right">Modal/unit</th><th className="text-right">Harga impas</th><th>Status</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Transaction Waterfall Detail Drawer Modal */}
-      {selectedTx && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="relative w-full max-w-2xl rounded-3xl border border-kompas-border bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setSelectedTx(null)}
-              className="absolute right-4 top-4 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="border-b border-gray-100 pb-4">
-              <div className="text-xs font-semibold text-teal-mid uppercase tracking-wider">
-                Rincian Waterfall Biaya Transaksi
-              </div>
-              <h3 className="text-xl font-bold text-deep-teal flex items-center gap-2 mt-0.5">
-                <span>{selectedTx.transaction?.transaction_id}</span>
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-teal-100 text-teal-800">
-                  {selectedTx.transaction?.marketplace}
-                </span>
-              </h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Order ID: {selectedTx.transaction?.order_id || "-"} | Produk: {selectedTx.transaction?.product_name || selectedTx.transaction?.sku}
-              </p>
+                </thead>
+                <tbody>
+                  {skuRows.map((row) => (
+                    <tr key={row.sku}>
+                      <td>
+                        <span className="block font-medium text-ink-950">{row.product_name ?? "SKU tidak dikenal"}</span>
+                        <span className="font-mono text-[11px] text-ink-500">{row.sku}</span>
+                        {row.data_warnings.map((w) => <span key={w} className="mt-0.5 block text-[11.5px] text-warning-800">⚠ {w}</span>)}
+                      </td>
+                      <td className="tnum text-right">{row.qty}</td>
+                      <td className="tnum text-right">{formatIDR(row.gross_sales)}</td>
+                      <td className="tnum text-right">{pct(row.deduction_pct)}</td>
+                      <td className={cn("tnum text-right font-semibold", Number(row.lk1) < 0 && "text-danger-700")}>{formatIDR(row.lk1)}</td>
+                      <td className="tnum text-right">{pct(row.lk1_margin_pct)}</td>
+                      <td className="tnum text-right text-ink-600">{row.modal_unit ? formatIDR(row.modal_unit) : "—"}</td>
+                      <td className="tnum text-right">{row.break_even_price ? formatIDR(row.break_even_price) : "—"}</td>
+                      <td>
+                        <StatusText
+                          status={row.lk2_status}
+                          detail={row.missing_components.length ? `Kurang: ${row.missing_components.join(", ")}` : undefined}
+                        />
+                        {row.missing_components.length ? <span className="block text-[11px] text-ink-500">Kurang: {row.missing_components.join(", ")}</span> : null}
+                        {row.negative_rows ? <span className="block text-[11px] text-danger-700">{row.negative_rows} baris rugi</span> : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          </section>
 
-            {/* Waterfall Breakdown list */}
-            <div className="mt-4 space-y-2 text-xs">
-              <div className="flex justify-between py-1.5 px-3 rounded-lg bg-gray-50 font-semibold text-deep-teal">
-                <span>Penjualan Kotor (Gross Sales)</span>
-                <span className="tabular-nums font-bold">{formatIDR(selectedTx.transaction?.gross_sales)}</span>
-              </div>
-
-              <div className="flex justify-between py-1 px-3 text-red-600">
-                <span>- Diskon Penjual</span>
-                <span className="tabular-nums font-medium">({formatIDR(selectedTx.transaction?.seller_discount || "0")})</span>
-              </div>
-
-              <div className="flex justify-between py-1 px-3 text-red-600">
-                <span>- Pengembalian Dana (Refund)</span>
-                <span className="tabular-nums font-medium">({formatIDR(selectedTx.transaction?.refund_amount || "0")})</span>
-              </div>
-
-              <div className="flex justify-between py-2 px-3 rounded-lg bg-teal-50 font-bold text-teal-900 border border-teal-200">
-                <span>= Pendapatan Bersih (Net Revenue)</span>
-                <span className="tabular-nums">{formatIDR(selectedTx.calculation?.net_revenue)}</span>
-              </div>
-
-              <div className="pt-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider px-3">
-                Biaya & Beban Operasional:
-              </div>
-
-              <div className="flex justify-between py-1 px-3 text-gray-700">
-                <span>- Modal Barang (COGS)</span>
-                <span className="tabular-nums font-medium">({formatIDR(selectedTx.transaction?.cogs)})</span>
-              </div>
-
-              <div className="flex justify-between py-1 px-3 text-gray-700">
-                <span>- Komisi Marketplace</span>
-                <span className="tabular-nums font-medium">({formatIDR(selectedTx.transaction?.marketplace_commission)})</span>
-              </div>
-
-              <div className="flex justify-between py-1 px-3 text-gray-700">
-                <span>- Biaya Tetap / Administrasi</span>
-                <span className="tabular-nums font-medium">({formatIDR(selectedTx.transaction?.fixed_fee)})</span>
-              </div>
-
-              <div className="flex justify-between py-1 px-3 text-gray-700">
-                <span>- Ongkir Ditanggung Penjual</span>
-                <span className="tabular-nums font-medium">({formatIDR(selectedTx.transaction?.seller_shipping_cost || "0")})</span>
-              </div>
-
-              <div className="flex justify-between py-1 px-3 text-gray-700">
-                <span>- Biaya Packing & Bubble Wrap</span>
-                <span className="tabular-nums font-medium">({formatIDR(selectedTx.transaction?.packing_cost)})</span>
-              </div>
-
-              {selectedTx.transaction?.return_logistics_cost && (
-                <div className="flex justify-between py-1 px-3 text-red-600 font-medium">
-                  <span>- Biaya Logistik Retur</span>
-                  <span className="tabular-nums">({formatIDR(selectedTx.transaction?.return_logistics_cost)})</span>
+          {/* Transactions */}
+          <section className="card overflow-hidden" aria-labelledby="tx-list">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-3">
+              <h2 id="tx-list" className="font-display text-base font-semibold">Baris transaksi</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-ink-400" aria-hidden="true" />
+                  <input aria-label="Cari transaksi" className="field-control h-9 w-56 pl-8" placeholder="No. pesanan atau SKU" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
-              )}
-
-              <div className="flex justify-between py-3 px-3 rounded-xl bg-emerald-50 font-bold text-base text-kompas-green border border-emerald-300">
-                <span>= Laba Bersih (Net Profit)</span>
-                <div className="text-right">
-                  <span className="tabular-nums">{formatIDR(selectedTx.calculation?.profit)}</span>
-                  <div className="text-xs font-semibold text-emerald-800">
-                    Margin: {selectedTx.calculation?.margin_pct || "0"}%
-                  </div>
-                </div>
+                <select aria-label="Status perhitungan" className="field-control h-9 w-52" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <option value="">Semua status</option>
+                  <option value="COMPLETE">Lengkap</option>
+                  <option value="PARTIAL">Belum lengkap</option>
+                  <option value="RECONCILIATION_REQUIRED">Perlu rekonsiliasi</option>
+                  <option value="NOT_CALCULABLE">Tidak dapat dihitung</option>
+                </select>
               </div>
             </div>
-
-            {/* Warnings list if any */}
-            {selectedTx.calculation?.warnings && selectedTx.calculation.warnings.length > 0 && (
-              <div className="mt-4 rounded-xl bg-amber-50 p-3 border border-amber-200 text-xs text-amber-900 space-y-1">
-                <div className="font-bold flex items-center gap-1.5">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <span>Catatan Rekonsiliasi & Audit:</span>
-                </div>
-                {selectedTx.calculation.warnings.map((w: string, idx: number) => (
-                  <div key={idx} className="pl-5">• {w}</div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* CSV Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="relative w-full max-w-xl rounded-3xl border border-kompas-border bg-white p-6 shadow-2xl space-y-4">
-            <button
-              onClick={() => {
-                setShowImportModal(false)
-                setImportPreview(null)
-                setImportSuccess(null)
-              }}
-              className="absolute right-4 top-4 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div>
-              <div className="text-xs font-semibold text-teal-mid uppercase tracking-wider">
-                Import Wizard
-              </div>
-              <h3 className="text-xl font-bold text-deep-teal">
-                Impor Laporan Penjualan CSV
-              </h3>
-              <p className="text-xs text-gray-500">
-                Unggah file laporan ekspor transaksi Shopee, TikTok Shop, atau Lazada.
-              </p>
+            <div className="max-h-[28rem] overflow-auto">
+              <table className="data-table">
+                <thead><tr><th>No. pesanan</th><th>Kanal</th><th>Tanggal</th><th>SKU</th><th className="text-right">Qty</th><th className="text-right">Omzet</th><th className="text-right">LK II</th><th>Status</th></tr></thead>
+                <tbody>
+                  {transactions.map((tx) => {
+                    const label = { COMPLETE: "Lengkap", PARTIAL: "Belum lengkap", RECONCILIATION_REQUIRED: "Perlu rekonsiliasi", NOT_CALCULABLE: "Tidak dapat dihitung" }[tx.calc_status as string] ?? tx.calc_status
+                    return (
+                      <tr key={tx.id} className="cursor-pointer" onClick={() => setDetailId(tx.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setDetailId(tx.id)}>
+                        <td className="font-mono text-[12px] text-brand-700">{tx.transaction_id}</td>
+                        <td>{tx.marketplace}</td>
+                        <td className="tnum">{tx.transaction_date}</td>
+                        <td className="font-mono text-[12px]">{tx.sku}</td>
+                        <td className="tnum text-right">{tx.qty}</td>
+                        <td className="tnum text-right">{formatIDR(tx.gross_sales)}</td>
+                        <td className={cn("tnum text-right", tx.profit && Number(tx.profit) < 0 && "text-danger-700")}>{tx.profit ? formatIDR(tx.profit) : "—"}</td>
+                        <td><StatusText status={tx.calc_status === "COMPLETE" ? "Lengkap" : label} /></td>
+                      </tr>
+                    )
+                  })}
+                  {!transactions.length ? <tr><td colSpan={8} className="text-center text-ink-500">Tidak ada baris untuk filter ini.</td></tr> : null}
+                </tbody>
+              </table>
             </div>
+          </section>
+        </>
+      ) : null}
 
-            {importSuccess ? (
-              <div className="rounded-2xl bg-emerald-50 p-6 text-center border border-emerald-200">
-                <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto mb-2" />
-                <div className="font-bold text-emerald-900">{importSuccess}</div>
-                <button
-                  onClick={() => {
-                    setShowImportModal(false)
-                    setImportSuccess(null)
-                  }}
-                  className="mt-4 rounded-xl bg-teal-mid px-4 py-2 text-xs font-bold text-white"
-                >
-                  Selesai
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="rounded-2xl border-2 border-dashed border-kompas-border p-6 text-center hover:border-teal-mid transition-colors bg-canvas/30">
-                  <FileSpreadsheet className="h-10 w-10 text-teal-mid mx-auto mb-2 opacity-80" />
-                  <div className="text-xs font-medium text-gray-700">
-                    Pilih file CSV laporan transaksi (.csv)
-                  </div>
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleUploadPreview}
-                    className="mt-3 block w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-mid hover:file:bg-teal-100"
-                  />
-                </div>
-
-                {importLoading && (
-                  <div className="text-center py-4 text-xs font-medium text-teal-mid animate-pulse">
-                    Memproses file & memetakan kolom...
-                  </div>
-                )}
-
-                {importPreview && (
-                  <div className="rounded-2xl bg-gray-50 p-4 border border-kompas-border text-xs space-y-2">
-                    <div className="flex justify-between font-bold text-deep-teal">
-                      <span>Total Baris Terdeteksi:</span>
-                      <span>{importPreview.total_rows} baris</span>
-                    </div>
-                    <div className="text-[11px] text-gray-500">
-                      Kolom berhasil dipetakan: {Object.keys(importPreview.suggested_mapping || {}).length} field
-                    </div>
-                    {importPreview.issues?.length > 0 && (
-                      <div className="text-amber-700 text-[11px] font-medium">
-                        ⚠️ Ditemukan {importPreview.issues.length} peringatan format pada pratinjau.
-                      </div>
-                    )}
-                    <button
-                      onClick={handleConfirmImport}
-                      disabled={importLoading}
-                      className="mt-3 w-full rounded-xl bg-teal-mid py-2.5 text-xs font-bold text-white hover:bg-teal-mid/90 shadow-sm"
-                    >
-                      Konfirmasi & Eksekusi Kalkulasi
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+      {showImport ? <ImportWizard onClose={() => setShowImport(false)} onDone={() => void load()} /> : null}
+      {detailId != null ? <TransactionDetail id={detailId} onClose={() => setDetailId(null)} /> : null}
+      {summary && !summary.by_sku.length ? (
+        <div className="card card-pad flex items-center gap-3 text-[13px] text-ink-600">
+          <FileSpreadsheet className="h-5 w-5 text-ink-400" /> Belum ada transaksi pada filter ini. Unggah laporan untuk mulai.
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

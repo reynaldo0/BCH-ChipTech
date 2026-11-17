@@ -7,44 +7,67 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import ImportBatch, ImportIssue, User
 from ..schemas import ImportConfirmRequest
-from ..security import get_current_user_optional
+from ..config import settings
+from ..security import require_finance
 from ..services import import_service
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
+
+
+
+def _error(exc: Exception) -> HTTPException:
+    if isinstance(exc, import_service.ImportErrorDetail):
+        return HTTPException(
+            status_code=400,
+            detail={"code": exc.code, "message": exc.message, **exc.detail},
+        )
+    return HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/preview")
 async def upload_preview(
     file: UploadFile = File(...),
     marketplace: str | None = Query(None),
+    sheet: str | None = Query(None),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(require_finance),
 ):
-    actor = current_user.username if current_user else "uploader"
     content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="File kosong.")
-
     try:
         preview = import_service.create_preview(
             db=db,
             filename=file.filename or "import.csv",
             content=content,
-            marketplace=marketplace,
-            created_by=actor,
+            marketplace=import_service.normalise_marketplace_param(marketplace),
+            actor=current_user.username,
+            sheet_name=sheet,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except (import_service.ImportErrorDetail, ValueError) as exc:
+        raise _error(exc)
 
+    batch = preview.batch
     return {
-        "batch_id": preview.batch_id,
-        "filename": preview.filename,
-        "total_rows": preview.total_rows,
+        "batch_id": batch.id,
+        "filename": batch.filename,
+        "marketplace": batch.marketplace,
+        "total_rows": batch.total_rows,
+        "valid_rows": batch.valid_rows,
+        "invalid_rows": batch.invalid_rows,
+        "duplicate_rows": batch.duplicate_rows,
+        "unmatched_sku": batch.unmatched_sku,
         "detected_columns": preview.detected_columns,
         "suggested_mapping": preview.suggested_mapping,
+        "field_labels": import_service.FIELD_LABELS,
+        "required_fields": import_service.REQUIRED_FIELDS,
         "preview_rows": preview.preview_rows,
         "issues": preview.issues,
-        "limits": preview.limits,
+        "cleaning": preview.cleaning,
+        "sheet_names": preview.sheet_names,
+        "limits": {
+            "max_file_mb": settings.import_max_file_mb,
+            "max_rows": settings.import_max_rows,
+            "max_columns": settings.import_max_columns,
+        },
     }
 
 
@@ -53,34 +76,22 @@ def confirm_import(
     batch_id: int,
     payload: ImportConfirmRequest,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(require_finance),
 ):
-    actor = current_user.username if current_user else "importer"
     try:
         result = import_service.confirm_import(
             db=db,
             batch_id=batch_id,
             mapping=payload.mapping,
-            actor=actor,
+            actor=current_user.username,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    return {
-        "batch_id": result.batch_id,
-        "status": result.status,
-        "total_rows": result.total_rows,
-        "valid_rows": result.valid_rows,
-        "invalid_rows": result.invalid_rows,
-        "duplicate_rows": result.duplicate_rows,
-        "unmatched_sku": result.unmatched_sku,
-        "issues": result.issues,
-        "calculation_run_id": result.calculation_run_id,
-    }
+    except (import_service.ImportErrorDetail, ValueError) as exc:
+        raise _error(exc)
+    return result
 
 
 @router.get("/batches")
-def list_batches(limit: int = 20, db: Session = Depends(get_db)):
+def list_batches(limit: int = 20, db: Session = Depends(get_db), _user: User = Depends(require_finance)):
     batches = db.scalars(
         select(ImportBatch).order_by(ImportBatch.created_at.desc()).limit(limit)
     ).all()
@@ -106,7 +117,7 @@ def list_batches(limit: int = 20, db: Session = Depends(get_db)):
 
 
 @router.get("/{batch_id}")
-def get_batch(batch_id: int, db: Session = Depends(get_db)):
+def get_batch(batch_id: int, db: Session = Depends(get_db), _user: User = Depends(require_finance)):
     batch = db.get(ImportBatch, batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Batch import tidak ditemukan.")

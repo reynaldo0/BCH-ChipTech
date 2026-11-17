@@ -10,15 +10,20 @@ class Settings(BaseSettings):
     demo_mode: bool = True
 
     database_url: str = f"sqlite:///{(ROOT / 'backend' / 'kompas.db').as_posix()}"
-    session_secret: str = "kompas-demo-secret-change-me"
+    session_secret: str = "kompas-demo-secret-change-me-please-32b"
     session_ttl_hours: int = 8
 
-    # AI provider (Jev / TypeSafe). Disabled unless a key is configured.
+    # AI provider: Jev (TypeSafe) via OpenRouter. OFF by default (proposal §4.2).
+    # Put the key in backend/.env as OPENROUTER_API_KEY=sk-or-v1-...
     jev_enabled: bool = False
-    jev_api_key: str = ""
-    jev_api_base_url: str = "https://api.typesafe.ai"
-    jev_model: str = "jev-1.13.0"
-    jev_timeout_ms: int = 8000
+    openrouter_api_key: str = ""
+    jev_api_key: str = ""  # legacy name, still accepted
+    jev_endpoint: str = "https://openrouter.ai/api/alpha/decisions"
+    jev_model: str = "typesafe/jev-1.14"
+    jev_timeout_ms: int = 2000
+    jev_retries: int = 1
+    jev_breaker_failures: int = 3
+    jev_breaker_cooldown_s: int = 600
 
     # Data freshness and calculation defaults (locked in DECISIONS.md)
     stock_freshness_hours: int = 24
@@ -47,8 +52,12 @@ class Settings(BaseSettings):
         return [x.strip() for x in self.allowed_origins.split(",") if x.strip()]
 
     @property
+    def openrouter_key(self) -> str:
+        return (self.openrouter_api_key or self.jev_api_key).strip()
+
+    @property
     def jev_ready(self) -> bool:
-        return bool(self.jev_enabled and self.jev_api_key.strip())
+        return bool(self.jev_enabled and self.openrouter_key)
 
 
 settings = Settings()

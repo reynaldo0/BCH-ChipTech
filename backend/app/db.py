@@ -35,3 +35,14 @@ def get_db() -> Generator[Session, None, None]:
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def now_wib() -> datetime:
+    """Current wall-clock time in WIB (Asia/Jakarta), naive.
+
+    Stock snapshots, cut-off checks, and drafts all speak WIB (OPS-003), so they
+    must not depend on the server's own timezone.
+    """
+    from datetime import timedelta
+
+    return (datetime.now(timezone.utc) + timedelta(hours=7)).replace(tzinfo=None)

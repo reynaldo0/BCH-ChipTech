@@ -35,14 +35,16 @@ export function Badge({
   children,
   className,
   icon,
+  title,
 }: {
   tone?: Tone
   children: React.ReactNode
   className?: string
   icon?: React.ReactNode
+  title?: string
 }) {
   return (
-    <span className={cn(badgeVariants({ tone }), className)}>
+    <span className={cn(badgeVariants({ tone }), className)} title={title}>
       {icon}
       {children}
     </span>

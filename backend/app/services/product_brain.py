@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..db import now_wib
 from ..models import (
     CapacityDay,
     Faq,
@@ -169,7 +170,7 @@ def latest_stock(db: Session, product_id: int) -> StockSnapshot | None:
 
 
 def stock_age_hours(snapshot: StockSnapshot, as_of: datetime | None = None) -> float:
-    reference = as_of or datetime.now()
+    reference = as_of or now_wib()
     delta = reference - snapshot.captured_at
     return max(0.0, delta.total_seconds() / 3600.0)
 
