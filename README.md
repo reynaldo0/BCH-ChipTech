@@ -38,8 +38,36 @@ Buka <http://localhost:3000>. Basis data demo (`backend/kompas.db`) dibuat dan d
 otomatis saat backend pertama kali menyala. Untuk kembali ke kondisi awal: hentikan
 backend, hapus `backend/kompas.db`, nyalakan lagi.
 
-Mode kerja (Owner/Manager/CS/Packing/Judge) dipilih di sidebar. Server menegakkan hak
-akses: CS dan Packing mendapat HTTP 403 untuk modal, margin, dan laba (tercatat di audit).
+## Role dan hak akses
+
+Role ditentukan oleh akun saat login, bukan dipilih atau diganti dari sidebar. Sidebar hanya
+menampilkan menu yang sesuai dengan role akun, sedangkan backend tetap memeriksa role pada
+setiap endpoint. Karena itu, menyembunyikan menu tidak menjadi satu-satunya lapisan keamanan.
+
+| Role | Tanggung jawab utama | Akses utama |
+|---|---|---|
+| **Owner** | Pemilik toko dan pengambil keputusan akhir. | Seluruh dashboard, laba dan modal, aturan fee, audit, persetujuan pengajuan akun, perubahan role pengguna, serta reset data demo ketika mode demo aktif. |
+| **Manager** | Mengawasi operasional harian dan rekonsiliasi. | Dashboard, Workspace CS, keluhan, produk/stok, laba dan modal, aturan fee, serta audit. Tidak dapat mengelola akun pengguna atau menurunkan role owner. |
+| **CS** | Menangani komunikasi pelanggan. | Workspace CS, analisis chat Jev/aturan, pembuatan draft jawaban, antrean chat, dan eskalasi keluhan. Tidak dapat melihat modal, margin, laba, aturan fee, atau audit finansial. |
+| **Packing** | Menjalankan proses gudang dan pengemasan. | Produk dan stok, pemantauan operasional, serta informasi yang diperlukan untuk pemenuhan pesanan. Tidak dapat melihat modal, margin, laba, aturan fee, atau audit finansial. |
+| **Judge** | Mengevaluasi kualitas keputusan sistem. | Dashboard, data evaluasi/golden set, laba dan modal untuk kebutuhan evaluasi, aturan fee dan audit. Tidak dapat menyetujui pengajuan akun atau mengelola role pengguna. |
+
+### Alur akun dan role
+
+1. Pengguna baru mengirim pengajuan akses melalui `/daftar` dengan nama, email, password,
+   dan role yang diminta.
+2. Pengajuan berstatus **PENDING** dan belum dapat digunakan untuk login.
+3. Owner membuka `/pengaturan`, meninjau pengajuan, lalu menyetujui atau menolaknya.
+4. Jika disetujui, akun dibuat dengan role yang ditetapkan owner. Jika ditolak, akun tidak
+   dibuat.
+5. Owner dapat mengubah role pengguna dari panel **Akun & Pengajuan**. Owner tidak dapat
+   menurunkan role akun owner yang sedang digunakan.
+6. Saat login, role diambil dari database. Tidak ada pemilih role dan tidak ada perpindahan
+   role langsung dari dashboard. Logout menghapus sesi dan mengembalikan pengguna ke `/masuk`.
+
+Pembatasan finansial berlaku di server: role CS dan Packing menerima HTTP 403 ketika
+mencoba mengakses modal, margin, laba, atau aturan fee; percobaan penolakan dicatat pada
+audit log.
 
 ## AI opsional: Jev lewat OpenRouter
 
@@ -127,8 +155,9 @@ Set `DEMO_MODE=false` di `backend/.env` dan `NEXT_PUBLIC_DEMO_MODE=false` di `fr
 
 - Backend **menolak menyala** bila `SESSION_SECRET` masih nilai contoh / kurang dari 32 karakter,
   `SEED_USER_PASSWORD` kosong, atau `ALLOWED_ORIGINS` berisi `*`.
-- Pemilih peran tanpa kata sandi dan reset data dinonaktifkan (HTTP 403); login memakai
-  `/masuk` dengan username `owner`, `manager`, `cs`, `packing`, `judge` dan `SEED_USER_PASSWORD`
-  sebagai kata sandi awal. Login dibatasi 5 kegagalan per 5 menit.
+- Pemilih role tanpa kata sandi dinonaktifkan (HTTP 403); login memakai `/masuk` dengan
+  username `owner`, `manager`, `cs`, `packing`, atau `judge` dan `SEED_USER_PASSWORD` sebagai
+  kata sandi awal. Role mengikuti akun yang berhasil login. Login dibatasi 5 kegagalan per
+  5 menit.
 - Atur `ALLOWED_ORIGINS` ke origin frontend sebenarnya, dan pakai PostgreSQL lewat `DATABASE_URL`.
 - Data seed adalah data dummy; kosongkan atau ganti sebelum dipakai untuk toko nyata.
