@@ -1,0 +1,4 @@
+api.kompasdev.my.id {
+    encode gzip
+    reverse_proxy backend:8005
+}

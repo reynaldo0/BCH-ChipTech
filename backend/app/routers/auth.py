@@ -63,7 +63,10 @@ ROLE_INFO = [
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     key = _throttle_key(request, payload.username)
     _check_throttle(key)
-    user = db.scalar(select(User).where(User.username == payload.username))
+    identifier = payload.username.strip()
+    user = db.scalar(
+        select(User).where((User.username == identifier) | (User.email == identifier.lower()))
+    )
     if not user or not user.is_active or not verify_password(payload.password, user.password_hash):
         _failures.setdefault(key, []).append(time.monotonic())
         raise HTTPException(
@@ -137,6 +140,7 @@ def decide_account_request(
             username = f"{username}_{request.id}"
         user = User(
             username=username,
+            email=request.email,
             display_name=request.display_name,
             role=payload.role or request.requested_role,
             password_hash=request.password_hash,

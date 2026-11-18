@@ -155,9 +155,8 @@ Set `DEMO_MODE=false` di `backend/.env` dan `NEXT_PUBLIC_DEMO_MODE=false` di `fr
 
 - Backend **menolak menyala** bila `SESSION_SECRET` masih nilai contoh / kurang dari 32 karakter,
   `SEED_USER_PASSWORD` kosong, atau `ALLOWED_ORIGINS` berisi `*`.
-- Pemilih role tanpa kata sandi dinonaktifkan (HTTP 403); login memakai `/masuk` dengan
-  username `owner`, `manager`, `cs`, `packing`, atau `judge` dan `SEED_USER_PASSWORD` sebagai
-  kata sandi awal. Role mengikuti akun yang berhasil login. Login dibatasi 5 kegagalan per
-  5 menit.
-- Atur `ALLOWED_ORIGINS` ke origin frontend sebenarnya, dan pakai PostgreSQL lewat `DATABASE_URL`.
+- Pemilih peran tanpa kata sandi dan reset data dinonaktifkan (HTTP 403); login memakai
+  `/masuk` dengan username `owner`, `manager`, `cs`, `packing`, `judge` dan `SEED_USER_PASSWORD`
+  sebagai kata sandi awal. Login dibatasi 5 kegagalan per 5 menit.
+- Atur `ALLOWED_ORIGINS` ke origin frontend sebenarnya, dan pakai MySQL lewat `DATABASE_URL`.
 - Data seed adalah data dummy; kosongkan atau ganti sebelum dipakai untuk toko nyata.

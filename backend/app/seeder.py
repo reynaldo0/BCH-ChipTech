@@ -71,23 +71,26 @@ def parse_datetime(val: str | None) -> datetime | None:
 
 def seed_users(db: Session) -> None:
     demo_users = [
-        ("owner", "Husin (Owner)", "owner"),
-        ("manager", "Operational Manager", "manager"),
-        ("cs", "CS Specialist", "cs"),
-        ("packing", "Warehouse & Packing", "packing"),
-        ("judge", "Competition Evaluator / Judge", "judge"),
+        ("owner", "owner@kompasdev.my.id", "Husin (Owner)", "owner"),
+        ("manager", "manager@kompasdev.my.id", "Operational Manager", "manager"),
+        ("cs", "cs@kompasdev.my.id", "CS Specialist", "cs"),
+        ("packing", "packing@kompasdev.my.id", "Warehouse & Packing", "packing"),
+        ("judge", "judge@kompasdev.my.id", "Competition Evaluator / Judge", "judge"),
     ]
-    for username, display_name, role in demo_users:
+    for username, email, display_name, role in demo_users:
         existing = db.scalar(select(User).where(User.username == username))
         if not existing:
             user = User(
                 username=username,
+                email=email,
                 display_name=display_name,
                 role=role,
                 password_hash=hash_password(settings.seed_user_password or "kompas123"),
                 is_active=True,
             )
             db.add(user)
+        elif not existing.email:
+            existing.email = email
     db.commit()
 
 
