@@ -46,11 +46,11 @@ MYSQL_PASSWORD=$(openssl rand -hex 32)
 MYSQL_ROOT_PASSWORD=$(openssl rand -hex 32)
 EOF
 chmod 600 .env
-cp deploy/backend.env.example deploy/backend.env
-chmod 600 deploy/backend.env
+cp backend/.env.example backend/.env
+chmod 600 backend/.env
 ```
 
-Edit `.env` and `deploy/backend.env` and set at least:
+Edit `.env` and `backend/.env` and set at least:
 
 - a unique `SESSION_SECRET` (64+ random characters);
 - a strong `SEED_USER_PASSWORD`;
@@ -84,7 +84,7 @@ Settings page.
 
 Dalam production, seeder akan memperbarui password kelima akun seeded agar sama
 dengan `SEED_USER_PASSWORD` setiap backend restart. Pastikan nilai tersebut sudah
-benar di `deploy/backend.env`, lalu rebuild dan restart:
+benar di `backend/.env`, lalu rebuild dan restart:
 
 ```bash
 docker compose up -d --build backend

@@ -27,7 +27,7 @@ services:
       db:
         condition: service_healthy
     env_file:
-      - ./deploy/backend.env
+      - ./backend/.env
     environment:
       DATABASE_URL: mysql+pymysql://kompas:${MYSQL_PASSWORD}@db:3306/kompas?charset=utf8mb4
       DATA_DIR: /app/data
