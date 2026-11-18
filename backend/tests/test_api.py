@@ -36,7 +36,17 @@ def test_login_supports_all_roles_without_client_selected_role():
         )
         assert resp.status_code == 200
         assert resp.json()["user"]["role"] == role
+        assert resp.json()["user"]["email"] == f"{role}@kompasdev.my.id"
         assert resp.json()["token"]
+
+
+def test_login_supports_seeded_email():
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "owner@kompasdev.my.id", "password": "kompas123"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["user"]["username"] == "owner"
 
 
 def test_products_list():

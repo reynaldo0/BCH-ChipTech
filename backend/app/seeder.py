@@ -80,12 +80,13 @@ def seed_users(db: Session) -> None:
     for username, email, display_name, role in demo_users:
         existing = db.scalar(select(User).where(User.username == username))
         if not existing:
+            seed_password = "kompas123" if settings.demo_mode else settings.seed_user_password
             user = User(
                 username=username,
                 email=email,
                 display_name=display_name,
                 role=role,
-                password_hash=hash_password(settings.seed_user_password or "kompas123"),
+                password_hash=hash_password(seed_password),
                 is_active=True,
             )
             db.add(user)
