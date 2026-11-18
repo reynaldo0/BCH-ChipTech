@@ -24,6 +24,7 @@ def init_db():
     from sqlalchemy import inspect, select, text
     from .db import SessionLocal
     from .models import Product, User
+    from .seeder import seed_users
     columns = {column["name"] for column in inspect(engine).get_columns("users")}
     if "email" not in columns:
         with engine.begin() as connection:
@@ -40,6 +41,7 @@ def init_db():
             user = db.scalar(select(User).where(User.username == username))
             if user and not user.email:
                 user.email = email
+        seed_users(db)
         db.commit()
     with SessionLocal() as db:
         if not db.scalar(select(Product).limit(1)):

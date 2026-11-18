@@ -90,8 +90,11 @@ def seed_users(db: Session) -> None:
                 is_active=True,
             )
             db.add(user)
-        elif not existing.email:
-            existing.email = email
+        else:
+            if not existing.email:
+                existing.email = email
+            if not settings.demo_mode and settings.seed_user_password:
+                existing.password_hash = hash_password(settings.seed_user_password)
     db.commit()
 
 

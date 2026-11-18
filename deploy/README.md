@@ -80,6 +80,24 @@ owner, manager, cs, packing, judge
 The owner can then approve account requests and manage user roles from the
 Settings page.
 
+### Sinkronkan password akun seeded
+
+Dalam production, seeder akan memperbarui password kelima akun seeded agar sama
+dengan `SEED_USER_PASSWORD` setiap backend restart. Pastikan nilai tersebut sudah
+benar di `deploy/backend.env`, lalu rebuild dan restart:
+
+```bash
+docker compose up -d --build backend
+docker compose restart backend
+docker compose logs backend --tail=30
+```
+
+Periksa environment yang diterima container tanpa menampilkan password:
+
+```bash
+docker compose exec backend python -c "from backend.app.config import settings; print('DEMO_MODE=', settings.demo_mode); print('DATABASE=', settings.database_url.split('@')[-1] if '@' in settings.database_url else 'configured') ; print('SEED_PASSWORD_SET=', bool(settings.seed_user_password))"
+```
+
 Useful operations:
 
 ```bash
